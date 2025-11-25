@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-/* ตัด @plugin "tailwindcss-animate"; ออก เพราะไม่ได้ลง package นี้ไว้ */
-
 /* Theme Settings สำหรับ Tailwind v4 */
 @theme inline {
   --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
@@ -9,8 +7,17 @@
 }
 
 :root {
-  --background: #020617; /* Slate 950 */
-  --foreground: #f8fafc; /* Slate 50 */
+  --background: #0a0a0a; /* Dark Black */
+  --foreground: #fafafa; /* Off White */
+  --primary-orange: #ff6b35; /* Orange */
+  --primary-orange-dark: #ff4500;
+  --primary-orange-light: #ff8c61;
+  --sidebar-bg: #141414;
+  --sidebar-hover: #1f1f1f;
+  --chat-bg: #0a0a0a;
+  --message-user-bg: linear-gradient(135deg, #ff6b35 0%, #ff4500 100%);
+  --message-bot-bg: #1a1a1a;
+  --border-color: #2a2a2a;
 }
 
 body {
@@ -19,4 +26,57 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* Custom Scrollbar */
+.scrollbar-custom::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 3px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
 }
