@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* ตัด @plugin "tailwindcss-animate"; ออก เพราะไม่ได้ลง package นี้ไว้ */
+
+/* Theme Settings สำหรับ Tailwind v4 */
+@theme inline {
+  --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono), Courier, monospace;
+}
+
+:root {
+  --background: #020617; /* Slate 950 */
+  --foreground: #f8fafc; /* Slate 50 */
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
