@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+model Chat {
+  id        String    @id @default(uuid())
+  title     String    @db.NVarChar(Max) 
+  
+  createdAt DateTime  @default(now())   
+  updatedAt DateTime  @updatedAt       
+  
+  messages  Message[] 
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  role      String   // 'user' หรือ 'model' (สำคัญมาก ต้องรู้ว่าใครพูด)
+  content   String   @db.NVarChar(Max) // เนื้อหาข้อความ (เก็บยาวๆ ได้ไม่จำกัด)
+  createdAt DateTime @default(now())   // เอาไว้เรียงลำดับข้อความ 1, 2, 3...
+  
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
