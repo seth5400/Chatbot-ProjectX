@@ -6,7 +6,7 @@ Full-stack chatbot application ที่ใช้ Gemini AI แบ่งออ�
 
 ```
 my-gemini-chatbot/
-├── frontend/                  # Next.js 16 Frontend Application
+├── frontend/                  # Next.js 14 Frontend Application
 │   ├── app/                  # App Router (Pages & Components)
 │   │   ├── page.tsx         # Main chat interface
 │   │   └── globals.css      # Global styles
@@ -68,9 +68,10 @@ Frontend จะรันที่ `http://localhost:3000`
 ## 🎯 เทคโนโลยีที่ใช้
 
 ### Frontend Stack
-- **Next.js 16** - React Framework with App Router
+- **Next.js 14** - React Framework with App Router
+- **React 18** - UI Library
 - **TypeScript** - Type-safe development
-- **Tailwind CSS 4** - Utility-first CSS framework
+- **Tailwind CSS 3** - Utility-first CSS framework
 
 ### Backend Stack
 - **.NET 10** - Web API Framework
@@ -79,12 +80,13 @@ Frontend จะรันที่ `http://localhost:3000`
 - **SQL Server** - Database
 
 ### AI & APIs
-- **Google Gemini AI** - gemini-2.0-flash-exp model
+- **Google Gemini AI** - gemini-2.5-flash model (เลือกได้หลาย model)
 - **Server-Sent Events (SSE)** - Real-time streaming
 
 ## ✨ คุณสมบัติ
 
 - ✅ **Real-time Streaming** - ข้อความจาก AI แสดงแบบ character-by-character
+- ✅ **AI Model Selection** - เลือก Gemini model ได้ (2.5 Flash, 2.5 Pro, 2.0 Flash, 3.0 Preview)
 - ✅ **Chat History** - บันทึกประวัติการสนทนาลง SQL Server
 - ✅ **Temporary Chat** - โหมดชั่วคราวที่ไม่บันทึก DB
 - ✅ **Rename & Delete** - เปลี่ยนชื่อและลบแชทได้
@@ -111,12 +113,21 @@ Frontend จะรันที่ `http://localhost:3000`
   "message": "สวัสดี",
   "chatId": "uuid (optional)",
   "temporary": false,
+  "modelId": "gemini-2.5-flash",
   "history": [
     {"role": "user", "content": "..."},
     {"role": "model", "content": "..."}
   ]
 }
 ```
+
+**Available Models:**
+- `gemini-2.5-flash` (Default - แนะนำ)
+- `gemini-2.5-flash-lite`
+- `gemini-2.5-pro`
+- `gemini-2.0-flash`
+- `gemini-2.0-flash-lite`
+- `gemini-3-pro-preview`
 
 ## 📚 Database Schema
 
@@ -225,7 +236,7 @@ This project is open source and available under the MIT License.
 ---
 
 **สร้างโดย:**
-Next.js 16 + .NET 10 + Entity Framework Core + Google Gemini AI
+Next.js 14 + .NET 10 + Entity Framework Core + Google Gemini AI
 
 **คุณสมบัติพิเศษ:**
 ✨ Real-time Streaming | 💾 SQL Server | 🎨 Modern UI | 🚀 RESTful API

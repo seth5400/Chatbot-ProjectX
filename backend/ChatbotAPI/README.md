@@ -6,17 +6,21 @@ Backend API สำหรับ Gemini AI Chatbot ใช้ .NET 10 Web API with 
 
 ```
 ChatbotAPI/
+├── Controllers/
+│   └── ChatController.cs     # API endpoints with streaming
+├── DTOs/
+│   ├── ChatRequestDto.cs     # Request models (รวม modelId)
+│   └── ChatResponseDto.cs    # Response models
 ├── Models/
-│   ├── Chat.cs              # Chat entity model
-│   └── Message.cs           # Message entity model
-│
+│   ├── Chat.cs               # Chat entity model
+│   └── Message.cs            # Message entity model
 ├── Data/
-│   └── AppDbContext.cs      # EF Core DbContext
-│
-├── Controllers/              # API Controllers (ที่จะสร้างต่อ)
-│
-├── appsettings.json         # Configuration
-└── Program.cs               # Application entry point
+│   └── AppDbContext.cs       # EF Core DbContext
+├── Services/
+│   └── GeminiService.cs      # Gemini AI integration
+├── Migrations/               # EF Core migrations
+├── appsettings.json          # Configuration
+└── Program.cs                # Application entry point
 ```
 
 ## Models
@@ -104,22 +108,24 @@ API ถูกตั้งค่าให้รับ requests จาก Next.js 
 policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
 ```
 
-## ขั้นตอนถัดไป
+## Available Gemini Models
 
-1. สร้าง Controllers:
-   - `ChatController.cs` - จัดการ CRUD operations สำหรับ Chat
-   - `MessageController.cs` - จัดการ Messages
+```
+gemini-2.5-flash       (Default - แนะนำ)
+gemini-2.5-flash-lite  (เร็วที่สุด)
+gemini-2.5-pro         (ฉลาดที่สุด)
+gemini-2.0-flash       (เสถียร)
+gemini-2.0-flash-lite  (เสถียร ประหยัด)
+gemini-3-pro-preview   (ใหม่ล่าสุด)
+```
 
-2. สร้าง DTOs (Data Transfer Objects):
-   - Request/Response models
+## API Features
 
-3. เพิ่ม Services:
-   - `GeminiService.cs` - เชื่อมต่อกับ Gemini API
-   - `ChatService.cs` - Business logic
-
-4. เพิ่ม Middleware:
-   - Error handling
-   - Logging
+- ✅ **Chat Management** - CRUD operations สำหรับ Chat
+- ✅ **Message Streaming** - SSE real-time streaming
+- ✅ **AI Model Selection** - เลือก Gemini model ได้
+- ✅ **Temporary Chat** - แชทที่ไม่บันทึกลง DB
+- ✅ **Chat History** - บันทึกประวัติการสนทนา
 
 ## เทคโนโลยีที่ใช้
 

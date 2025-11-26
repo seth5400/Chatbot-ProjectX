@@ -88,6 +88,7 @@ Content-Type: application/json
   "message": "Tell me about AI",
   "chatId": "uuid (optional)",
   "temporary": false,
+  "modelId": "gemini-2.5-flash",
   "history": [
     {
       "role": "user",
@@ -334,7 +335,8 @@ ENTRYPOINT ["dotnet", "ChatbotAPI.dll"]
 
 ### 2. Gemini API Error
 - ตรวจสอบว่า API key ถูกต้อง
-- ตรวจสอบว่า model name เป็น `gemini-2.0-flash-exp`
+- ตรวจสอบว่า model name ถูกต้อง (default: `gemini-2.5-flash`)
+- Available models: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-3-pro-preview`
 - ตรวจสอบ internet connection
 
 ### 3. CORS Error
