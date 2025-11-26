@@ -142,12 +142,13 @@ namespace ChatbotAPI.Controllers
                     else
                     {
                         // Create new chat
+                        // Generate AI-powered title (like ChatGPT)
+                        var chatTitle = await _geminiService.GenerateChatTitleAsync(request.Message);
+
                         chat = new Chat
                         {
                             Id = Guid.NewGuid().ToString(),
-                            Title = request.Message.Length > 50
-                                ? request.Message.Substring(0, 50) + "..."
-                                : request.Message,
+                            Title = chatTitle,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         };
@@ -188,7 +189,8 @@ namespace ChatbotAPI.Controllers
                     request.Message,
                     history,
                     chat?.Id,
-                    request.ModelId))
+                    request.ModelId,
+                    request.EnableGrounding))
                 {
                     var json = JsonSerializer.Serialize(chunk);
                     await Response.WriteAsync($"data: {json}\n\n");

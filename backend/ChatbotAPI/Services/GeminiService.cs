@@ -48,7 +48,8 @@ namespace ChatbotAPI.Services
             string message,
             List<MessageHistoryDto>? history = null,
             string? chatId = null,
-            string? modelId = null)
+            string? modelId = null,
+            bool enableGrounding = false)
         {
             // Validate and set model
             var model = ValidateModel(modelId);
@@ -61,7 +62,7 @@ namespace ChatbotAPI.Services
             };
 
             // Use helper method to get all chunks, then yield them
-            await foreach (var chunk in StreamChunksInternalAsync(message, history, model))
+            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, enableGrounding))
             {
                 yield return chunk;
             }
@@ -78,7 +79,8 @@ namespace ChatbotAPI.Services
         private async IAsyncEnumerable<StreamChunkDto> StreamChunksInternalAsync(
             string message,
             List<MessageHistoryDto>? history,
-            string model)
+            string model,
+            bool enableGrounding = false)
         {
             var channel = Channel.CreateUnbounded<StreamChunkDto>();
 
@@ -109,10 +111,29 @@ namespace ChatbotAPI.Services
                     Parts = new List<Part> { new Part { Text = message } }
                 });
 
-                var requestBody = new
+                // Build request body with optional Google Search Grounding
+                object requestBody;
+                if (enableGrounding)
                 {
-                    contents = contents
-                };
+                    requestBody = new
+                    {
+                        contents = contents,
+                        tools = new[]
+                        {
+                            new
+                            {
+                                googleSearch = new { }
+                            }
+                        }
+                    };
+                }
+                else
+                {
+                    requestBody = new
+                    {
+                        contents = contents
+                    };
+                }
 
                 var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
                 {
@@ -230,6 +251,77 @@ namespace ChatbotAPI.Services
             }
 
             await fetchTask;
+        }
+
+        /// <summary>
+        /// Generate a short, concise title for a chat based on the first message
+        /// Uses AI to summarize the main topic (like ChatGPT does)
+        /// </summary>
+        public async Task<string> GenerateChatTitleAsync(string firstMessage)
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+            // Use fast model for title generation
+            var url = $"{BaseUrl}/gemini-2.0-flash-lite:generateContent?key={_apiKey}";
+
+            var prompt = $@"สรุปข้อความนี้เป็นชื่อหัวข้อสั้นๆ ไม่เกิน 30 ตัวอักษร ภาษาเดียวกับข้อความ ไม่ต้องใส่เครื่องหมายคำพูด:
+
+""{firstMessage}""
+
+ตอบแค่ชื่อหัวข้อเท่านั้น:";
+
+            var requestBody = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        parts = new[] { new { text = prompt } }
+                    }
+                },
+                generationConfig = new
+                {
+                    maxOutputTokens = 50,
+                    temperature = 0.3
+                }
+            };
+
+            var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            try
+            {
+                var response = await httpClient.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+
+                var responseJson = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+
+                var title = result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text?.Trim();
+
+                // Clean up the title - remove quotes if present
+                if (!string.IsNullOrEmpty(title))
+                {
+                    title = title.Trim('"', '\'', '"', '"', '「', '」');
+                    // Limit to 50 chars max
+                    if (title.Length > 50)
+                        title = title.Substring(0, 47) + "...";
+                    return title;
+                }
+
+                // Fallback to truncated message
+                return firstMessage.Length > 50 ? firstMessage.Substring(0, 47) + "..." : firstMessage;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to generate chat title, using fallback");
+                // Fallback to truncated message
+                return firstMessage.Length > 50 ? firstMessage.Substring(0, 47) + "..." : firstMessage;
+            }
         }
 
         public async Task<string> SendMessageAsync(

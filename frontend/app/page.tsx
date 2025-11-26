@@ -39,10 +39,16 @@ export default function Home() {
   const [renameValue, setRenameValue] = useState("");
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [enableGrounding, setEnableGrounding] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -142,6 +148,86 @@ export default function Home() {
     }
   };
 
+  // Copy message to clipboard
+  const copyToClipboard = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  };
+
+  // Edit message and resend
+  const handleEditMessage = (index: number, content: string) => {
+    setEditingIndex(index);
+    setEditValue(content);
+  };
+
+  const submitEditedMessage = async () => {
+    if (editingIndex === null || !editValue.trim()) return;
+
+    // Remove messages from editingIndex onwards
+    const newMessages = messages.slice(0, editingIndex);
+    setMessages(newMessages);
+    setEditingIndex(null);
+
+    // Set input and send
+    setInput(editValue);
+    setEditValue("");
+
+    // Need to wait for state update, then send
+    setTimeout(() => {
+      const form = document.querySelector('form');
+      if (form) {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    }, 100);
+  };
+
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setEditValue("");
+  };
+
+  // Stop generating
+  const stopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
+  };
+
+  // Regenerate AI response - find the user message before this AI message and resend
+  const regenerateResponse = (aiMessageIndex: number) => {
+    if (isLoading) return;
+
+    // Find the user message before this AI message
+    let userMessageIndex = aiMessageIndex - 1;
+    while (userMessageIndex >= 0 && messages[userMessageIndex].role !== "user") {
+      userMessageIndex--;
+    }
+
+    if (userMessageIndex < 0) return;
+
+    const userMessage = messages[userMessageIndex].content;
+
+    // Remove the AI message (and any messages after it)
+    const newMessages = messages.slice(0, aiMessageIndex);
+    setMessages(newMessages);
+
+    // Set input and trigger send
+    setInput(userMessage);
+    setTimeout(() => {
+      const form = document.querySelector("form");
+      if (form) {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      }
+    }, 100);
+  };
+
   const sendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -159,6 +245,10 @@ export default function Home() {
     const botMessageIndex = messages.length + 1; // index ของ bot message ใน array ใหม่
     setIsLoading(true);
 
+    // Create AbortController for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const response = await fetch(API_ENDPOINTS.CHAT, {
         method: "POST",
@@ -168,9 +258,11 @@ export default function Home() {
           chatId: currentChatId,
           temporary: isTemporary,
           modelId: selectedModel,
+          enableGrounding: enableGrounding,
           // สำหรับ temporary chat ส่ง history ไป, chat ปกติให้ backend โหลดจาก DB
           history: isTemporary ? messages : undefined,
         }),
+        signal: abortController.signal,
       });
 
       if (!response.ok) {
@@ -222,6 +314,13 @@ export default function Home() {
         }
       }
     } catch (error) {
+      // Check if it was aborted
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Request was aborted");
+        // Keep the partial response if any
+        return;
+      }
+
       console.error("Chat Error:", error);
       setMessages((prev) => {
         const newMessages = [...prev];
@@ -233,6 +332,7 @@ export default function Home() {
       });
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -417,6 +517,25 @@ export default function Home() {
               )}
             </div>
 
+            {/* Google Search Grounding Toggle */}
+            <button
+              onClick={() => setEnableGrounding(!enableGrounding)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                enableGrounding
+                  ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white"
+                  : "bg-[#1a1a1a] hover:bg-[#2a2a2a] text-gray-300 border border-[#2a2a2a]"
+              }`}
+              title="เปิดใช้ Google Search เพื่อค้นหาข้อมูลปัจจุบัน (ค่าเงิน, ข่าว, ฯลฯ)"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="hidden sm:inline">ค้นหา Google</span>
+              {enableGrounding && (
+                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+              )}
+            </button>
+
             <button
               onClick={createTemporaryChat}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -449,84 +568,161 @@ export default function Home() {
             messages.map((msg, index) => (
               <div
                 key={index}
-                className={`mb-6 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`mb-4 flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
               >
-                <div
-                  className={`max-w-[75%] px-4 py-3 rounded-2xl ${
-                    msg.role === "user"
-                      ? "bg-gradient-to-r from-[#ff6b35] to-[#ff4500] text-white rounded-br-md"
-                      : "bg-[#1a1a1a] text-gray-100 rounded-bl-md border border-[#2a2a2a]"
-                  }`}
-                >
-                  {msg.role === "user" ? (
-                    <div className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</div>
-                  ) : (
-                    <div className="text-sm leading-relaxed prose prose-invert prose-sm max-w-none">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          // Headings
-                          h1: ({ children }) => <h1 className="text-xl font-bold mt-4 mb-2 text-white">{children}</h1>,
-                          h2: ({ children }) => <h2 className="text-lg font-bold mt-3 mb-2 text-white">{children}</h2>,
-                          h3: ({ children }) => <h3 className="text-base font-semibold mt-2 mb-1 text-white">{children}</h3>,
-                          // Paragraphs
-                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                          // Bold & Italic
-                          strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
-                          em: ({ children }) => <em className="italic text-gray-300">{children}</em>,
-                          // Lists
-                          ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                          li: ({ children }) => <li className="text-gray-200">{children}</li>,
-                          // Code
-                          code: ({ className, children }) => {
-                            const isInline = !className;
-                            return isInline ? (
-                              <code className="bg-[#2a2a2a] text-[#ff6b35] px-1.5 py-0.5 rounded text-xs font-mono">
-                                {children}
-                              </code>
-                            ) : (
-                              <code className="block bg-[#0a0a0a] text-gray-300 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2">
-                                {children}
-                              </code>
-                            );
-                          },
-                          pre: ({ children }) => <pre className="bg-[#0a0a0a] rounded-lg overflow-x-auto my-2">{children}</pre>,
-                          // Links
-                          a: ({ href, children }) => (
-                            <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#ff6b35] hover:underline">
-                              {children}
-                            </a>
-                          ),
-                          // Blockquote
-                          blockquote: ({ children }) => (
-                            <blockquote className="border-l-4 border-[#ff6b35] pl-3 my-2 text-gray-400 italic">
-                              {children}
-                            </blockquote>
-                          ),
-                          // Horizontal rule
-                          hr: () => <hr className="border-[#2a2a2a] my-4" />,
-                          // Table
-                          table: ({ children }) => (
-                            <div className="overflow-x-auto my-2">
-                              <table className="min-w-full border border-[#2a2a2a] rounded">{children}</table>
-                            </div>
-                          ),
-                          th: ({ children }) => <th className="bg-[#2a2a2a] px-3 py-2 text-left text-white font-semibold">{children}</th>,
-                          td: ({ children }) => <td className="border-t border-[#2a2a2a] px-3 py-2">{children}</td>,
-                        }}
+                {/* Edit mode for user messages */}
+                {editingIndex === index && msg.role === "user" ? (
+                  <div className="w-full max-w-2xl">
+                    <textarea
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      className="w-full p-3 bg-[#1a1a1a] border border-[#ff6b35] rounded-lg text-white text-sm resize-none focus:outline-none"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 mt-2 justify-end">
+                      <button
+                        onClick={cancelEdit}
+                        className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
                       >
-                        {msg.content}
-                      </ReactMarkdown>
+                        ยกเลิก
+                      </button>
+                      <button
+                        onClick={submitEditedMessage}
+                        className="px-3 py-1.5 text-sm bg-gradient-to-r from-[#ff6b35] to-[#ff4500] text-white rounded-lg hover:opacity-90 transition-opacity"
+                      >
+                        ส่งใหม่
+                      </button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"} max-w-[80%]`}>
+                    {/* Message bubble */}
+                    <div
+                      className={`px-4 py-3 rounded-2xl ${
+                        msg.role === "user"
+                          ? "bg-gradient-to-r from-[#ff6b35] to-[#ff4500] text-white rounded-br-md"
+                          : "bg-[#1a1a1a] text-gray-100 rounded-bl-md border border-[#2a2a2a]"
+                      }`}
+                    >
+                      {msg.role === "user" ? (
+                        <div className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</div>
+                      ) : (
+                        <div className="text-sm leading-relaxed prose prose-invert prose-sm max-w-none">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              h1: ({ children }) => <h1 className="text-xl font-bold mt-4 mb-2 text-white">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-lg font-bold mt-3 mb-2 text-white">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-base font-semibold mt-2 mb-1 text-white">{children}</h3>,
+                              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+                              em: ({ children }) => <em className="italic text-gray-300">{children}</em>,
+                              ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                              li: ({ children }) => <li className="text-gray-200">{children}</li>,
+                              code: ({ className, children }) => {
+                                const isInline = !className;
+                                return isInline ? (
+                                  <code className="bg-[#2a2a2a] text-[#ff6b35] px-1.5 py-0.5 rounded text-xs font-mono">
+                                    {children}
+                                  </code>
+                                ) : (
+                                  <code className="block bg-[#0a0a0a] text-gray-300 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2">
+                                    {children}
+                                  </code>
+                                );
+                              },
+                              pre: ({ children }) => <pre className="bg-[#0a0a0a] rounded-lg overflow-x-auto my-2">{children}</pre>,
+                              a: ({ href, children }) => (
+                                <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#ff6b35] hover:underline">
+                                  {children}
+                                </a>
+                              ),
+                              blockquote: ({ children }) => (
+                                <blockquote className="border-l-4 border-[#ff6b35] pl-3 my-2 text-gray-400 italic">
+                                  {children}
+                                </blockquote>
+                              ),
+                              hr: () => <hr className="border-[#2a2a2a] my-4" />,
+                              table: ({ children }) => (
+                                <div className="overflow-x-auto my-2">
+                                  <table className="min-w-full border border-[#2a2a2a] rounded">{children}</table>
+                                </div>
+                              ),
+                              th: ({ children }) => <th className="bg-[#2a2a2a] px-3 py-2 text-left text-white font-semibold">{children}</th>,
+                              td: ({ children }) => <td className="border-t border-[#2a2a2a] px-3 py-2">{children}</td>,
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action buttons - always present, opacity controlled by hover */}
+                    <div
+                      className={`flex gap-1 mt-1 h-7 transition-opacity duration-200 ${
+                        msg.role === "user" ? "mr-1" : "ml-1"
+                      } ${hoveredIndex === index && !isLoading ? "opacity-100" : "opacity-0"}`}
+                    >
+                      {/* Copy button */}
+                      <button
+                        onClick={() => copyToClipboard(msg.content, index)}
+                        className="p-1.5 hover:bg-[#2a2a2a] rounded-lg transition-colors"
+                        title="คัดลอก"
+                        tabIndex={hoveredIndex === index ? 0 : -1}
+                      >
+                        {copiedIndex === index ? (
+                          <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4 text-gray-500 hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
+
+                      {/* Edit button - only for user messages */}
+                      {msg.role === "user" && (
+                        <button
+                          onClick={() => handleEditMessage(index, msg.content)}
+                          className="p-1.5 hover:bg-[#2a2a2a] rounded-lg transition-colors"
+                          title="แก้ไข"
+                          tabIndex={hoveredIndex === index ? 0 : -1}
+                        >
+                          <svg className="w-4 h-4 text-gray-500 hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {/* Regenerate button - only for AI messages */}
+                      {msg.role === "model" && (
+                        <button
+                          onClick={() => regenerateResponse(index)}
+                          className="p-1.5 hover:bg-[#2a2a2a] rounded-lg transition-colors"
+                          title="ตอบใหม่"
+                          tabIndex={hoveredIndex === index ? 0 : -1}
+                        >
+                          <svg className="w-4 h-4 text-gray-500 hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}
 
+          {/* Loading indicator - only dots, stop button moved to input area */}
           {isLoading && (
-            <div className="flex justify-start mb-6">
+            <div className="flex justify-start mb-4">
               <div className="bg-[#1a1a1a] border border-[#2a2a2a] px-4 py-3 rounded-2xl rounded-bl-md flex space-x-2">
                 <div className="w-2 h-2 bg-[#ff6b35] rounded-full animate-bounce" style={{ animationDelay: "0s" }}></div>
                 <div className="w-2 h-2 bg-[#ff6b35] rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
@@ -548,15 +744,30 @@ export default function Home() {
               disabled={isLoading}
               className="w-full pl-4 pr-14 py-4 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl focus:outline-none focus:border-[#ff6b35] text-white placeholder-gray-500 transition-all disabled:opacity-50"
             />
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-gradient-to-r from-[#ff6b35] to-[#ff4500] hover:from-[#ff4500] hover:to-[#ff6b35] text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-              </svg>
-            </button>
+            {isLoading ? (
+              /* Stop button - replaces send button while loading */
+              <button
+                type="button"
+                onClick={stopGenerating}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-[#2a2a2a] hover:bg-[#3a3a3a] border border-[#3a3a3a] text-white rounded-lg transition-all"
+                title="หยุดสร้างข้อความ"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <rect x="6" y="6" width="8" height="8" rx="1" />
+                </svg>
+              </button>
+            ) : (
+              /* Send button */
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-gradient-to-r from-[#ff6b35] to-[#ff4500] hover:from-[#ff4500] hover:to-[#ff6b35] text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                </svg>
+              </button>
+            )}
           </form>
         </div>
       </main>

@@ -18,6 +18,13 @@ namespace ChatbotAPI.DTOs
         /// Default: "gemini-2.5-flash"
         /// </summary>
         public string ModelId { get; set; } = "gemini-2.5-flash";
+
+        /// <summary>
+        /// Enable Google Search Grounding for real-time data
+        /// When enabled, AI can search Google to get current information (e.g., exchange rates, news)
+        /// Default: false
+        /// </summary>
+        public bool EnableGrounding { get; set; } = false;
     }
 
     public class MessageHistoryDto
