@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { API_ENDPOINTS } from "@/lib/config";
 
 type Message = {
   role: "user" | "model";
@@ -53,9 +54,10 @@ export default function Home() {
 
   const loadChats = async () => {
     try {
-      const response = await fetch("/api/chat");
+      const response = await fetch(API_ENDPOINTS.CHAT);
+      if (!response.ok) throw new Error("Failed to load chats");
       const data = await response.json();
-      setChats(data.chats || []);
+      setChats(data || []);
     } catch (error) {
       console.error("Failed to load chats:", error);
     }
@@ -63,9 +65,10 @@ export default function Home() {
 
   const loadChat = async (chatId: string) => {
     try {
-      const response = await fetch(`/api/chat/${chatId}`);
+      const response = await fetch(API_ENDPOINTS.CHAT_BY_ID(chatId));
+      if (!response.ok) throw new Error("Failed to load chat");
       const data = await response.json();
-      setMessages(data.chat.messages || []);
+      setMessages(data.messages || []);
       setCurrentChatId(chatId);
       setIsTemporary(false);
     } catch (error) {
@@ -87,8 +90,11 @@ export default function Home() {
 
   const deleteChat = async (chatId: string) => {
     try {
-      await fetch(`/api/chat/${chatId}`, { method: "DELETE" });
-      setChats(chats.filter(chat => chat.id !== chatId));
+      const response = await fetch(API_ENDPOINTS.CHAT_BY_ID(chatId), {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete chat");
+      setChats(chats.filter((chat) => chat.id !== chatId));
       if (currentChatId === chatId) {
         createNewChat();
       }
@@ -100,14 +106,17 @@ export default function Home() {
 
   const renameChat = async (chatId: string, newTitle: string) => {
     try {
-      await fetch(`/api/chat/${chatId}`, {
+      const response = await fetch(API_ENDPOINTS.CHAT_BY_ID(chatId), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newTitle }),
       });
-      setChats(chats.map(chat =>
-        chat.id === chatId ? { ...chat, title: newTitle } : chat
-      ));
+      if (!response.ok) throw new Error("Failed to rename chat");
+      setChats(
+        chats.map((chat) =>
+          chat.id === chatId ? { ...chat, title: newTitle } : chat
+        )
+      );
       setIsRenaming(null);
       setMenuOpenId(null);
     } catch (error) {
@@ -127,22 +136,21 @@ export default function Home() {
       content: currentInput,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // เพิ่ม user message และ placeholder สำหรับ bot message พร้อมกัน
+    setMessages((prev) => [...prev, userMessage, { role: "model", content: "" }]);
+    const botMessageIndex = messages.length + 1; // index ของ bot message ใน array ใหม่
     setIsLoading(true);
 
-    // เพิ่ม placeholder สำหรับ bot message
-    const botMessageIndex = messages.length + 1;
-    setMessages((prev) => [...prev, { role: "model", content: "" }]);
-
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(API_ENDPOINTS.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: currentInput,
           chatId: currentChatId,
           temporary: isTemporary,
-          history: isTemporary ? messages : []
+          // สำหรับ temporary chat ส่ง history ไป, chat ปกติให้ backend โหลดจาก DB
+          history: isTemporary ? messages : undefined,
         }),
       });
 
@@ -160,37 +168,36 @@ export default function Home() {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value);
+          const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split("\n\n");
 
           for (const line of lines) {
             if (line.startsWith("data: ")) {
               try {
-                const data = JSON.parse(line.slice(6));
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr) continue;
 
-                if (data.type === "metadata" && data.chatId) {
-                  setCurrentChatId(data.chatId);
-                } else if (data.type === "chunk") {
-                  fullText += data.text;
+                const data = JSON.parse(jsonStr);
+
+                // Backend ส่งมาเป็น PascalCase: Type, ChatId, Text
+                if (data.Type === "metadata" && data.ChatId) {
+                  setCurrentChatId(data.ChatId);
+                } else if (data.Type === "chunk" && data.Text) {
+                  fullText += data.Text;
                   setMessages((prev) => {
                     const newMessages = [...prev];
-                    newMessages[botMessageIndex] = { role: "model", content: fullText };
+                    newMessages[botMessageIndex] = {
+                      role: "model",
+                      content: fullText,
+                    };
                     return newMessages;
                   });
-                } else if (data.type === "done") {
+                } else if (data.Type === "done") {
                   loadChats(); // Reload chat list
                 }
               } catch (e) {
                 console.error("Parse error:", e);
               }
-            } else if (line.trim()) {
-              // For temporary chat (plain text streaming)
-              fullText += line;
-              setMessages((prev) => {
-                const newMessages = [...prev];
-                newMessages[botMessageIndex] = { role: "model", content: fullText };
-                return newMessages;
-              });
             }
           }
         }
@@ -201,7 +208,7 @@ export default function Home() {
         const newMessages = [...prev];
         newMessages[botMessageIndex] = {
           role: "model",
-          content: "⚠️ ขออภัย ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"
+          content: "⚠️ ขออภัย ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง",
         };
         return newMessages;
       });

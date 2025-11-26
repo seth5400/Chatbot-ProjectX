@@ -1,0 +1,53 @@
+## .NET Core
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Migration logs
+Migrations/
+
+# Configuration files with secrets
+appsettings.Development.json
+appsettings.Local.json
+*.local.json
+
+# User secrets
+secrets.json
+
+# Visual Studio cache/options
+.vs/
+.vscode/
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# Test Results
+TestResults/
+*.trx
+
+# Build Results
+publish/
+*.dll
+*.exe
+*.pdb
+
+# Logs
+logs/
+*.log
