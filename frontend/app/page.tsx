@@ -14,6 +14,16 @@ type Chat = {
   updatedAt: string;
 };
 
+// Available Gemini models (Updated from API)
+const AI_MODELS = [
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "แนะนำ - เร็วและฉลาด" },
+  { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", description: "เร็วที่สุด ประหยัด" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "ฉลาดที่สุด" },
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", description: "เสถียร เร็ว" },
+  { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite", description: "เสถียร ประหยัด" },
+  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro (Preview)", description: "ใหม่ล่าสุด ทดลอง" },
+];
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -25,9 +35,12 @@ export default function Home() {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -41,11 +54,14 @@ export default function Home() {
     loadChats();
   }, []);
 
-  // Close menu when clicking outside
+  // Close menu and model dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpenId(null);
+      }
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
+        setIsModelDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -149,6 +165,7 @@ export default function Home() {
           message: currentInput,
           chatId: currentChatId,
           temporary: isTemporary,
+          modelId: selectedModel,
           // สำหรับ temporary chat ส่ง history ไป, chat ปกติให้ backend โหลดจาก DB
           history: isTemporary ? messages : undefined,
         }),
@@ -351,19 +368,67 @@ export default function Home() {
             </div>
           </div>
 
-          <button
-            onClick={createTemporaryChat}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              isTemporary
-                ? "bg-[#ff6b35] text-white"
-                : "bg-[#1a1a1a] hover:bg-[#2a2a2a] text-gray-300"
-            }`}
-          >
-            <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            แชทชั่วคราว
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Model Selector */}
+            <div className="relative" ref={modelDropdownRef}>
+              <button
+                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#2a2a2a] rounded-lg text-sm transition-all"
+              >
+                <svg className="w-4 h-4 text-[#ff6b35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span className="text-gray-300">
+                  {AI_MODELS.find(m => m.id === selectedModel)?.name || "เลือกโมเดล"}
+                </span>
+                <svg className={`w-4 h-4 text-gray-400 transition-transform ${isModelDropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Dropdown */}
+              {isModelDropdownOpen && (
+                <div className="absolute right-0 top-12 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-lg z-50 w-64 animate-fade-in">
+                  {AI_MODELS.map((model) => (
+                    <button
+                      key={model.id}
+                      onClick={() => {
+                        setSelectedModel(model.id);
+                        setIsModelDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-3 text-sm hover:bg-[#2a2a2a] first:rounded-t-lg last:rounded-b-lg flex items-center justify-between ${
+                        selectedModel === model.id ? "bg-[#2a2a2a]" : ""
+                      }`}
+                    >
+                      <div>
+                        <div className="text-white">{model.name}</div>
+                        <div className="text-xs text-gray-500">{model.description}</div>
+                      </div>
+                      {selectedModel === model.id && (
+                        <svg className="w-4 h-4 text-[#ff6b35]" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={createTemporaryChat}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                isTemporary
+                  ? "bg-[#ff6b35] text-white"
+                  : "bg-[#1a1a1a] hover:bg-[#2a2a2a] text-gray-300"
+              }`}
+            >
+              <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              แชทชั่วคราว
+            </button>
+          </div>
         </header>
 
         {/* Messages */}

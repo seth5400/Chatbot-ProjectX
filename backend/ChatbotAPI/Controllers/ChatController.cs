@@ -187,7 +187,8 @@ namespace ChatbotAPI.Controllers
                 await foreach (var chunk in _geminiService.SendMessageStreamAsync(
                     request.Message,
                     history,
-                    chat?.Id))
+                    chat?.Id,
+                    request.ModelId))
                 {
                     var json = JsonSerializer.Serialize(chunk);
                     await Response.WriteAsync($"data: {json}\n\n");

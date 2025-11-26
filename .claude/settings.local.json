@@ -7,7 +7,14 @@
       "Bash(dotnet ef database update:*)",
       "Bash(npm install)",
       "Bash(npm run build:*)",
-      "Bash(dotnet remove:*)"
+      "Bash(dotnet remove:*)",
+      "Bash(find:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet tool:*)",
+      "Bash(dotnet tool install:*)",
+      "Bash(dotnet --list-sdks:*)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm run lint)"
     ],
     "deny": [],
     "ask": []

@@ -24,11 +24,35 @@ namespace ChatbotAPI.Services
             _logger = logger;
         }
 
+        // Available Gemini models (Free Tier) - Updated from API response
+        private static readonly HashSet<string> ValidModels = new()
+        {
+            // Gemini 2.5 (Latest)
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            // Gemini 2.0
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            // Gemini 3.0 Preview
+            "gemini-3-pro-preview",
+            // Latest aliases
+            "gemini-pro-latest",
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest"
+        };
+
+        private const string DefaultModel = "gemini-2.5-flash";
+
         public async IAsyncEnumerable<StreamChunkDto> SendMessageStreamAsync(
             string message,
             List<MessageHistoryDto>? history = null,
-            string? chatId = null)
+            string? chatId = null,
+            string? modelId = null)
         {
+            // Validate and set model
+            var model = ValidateModel(modelId);
+
             // Send metadata first
             yield return new StreamChunkDto
             {
@@ -37,15 +61,24 @@ namespace ChatbotAPI.Services
             };
 
             // Use helper method to get all chunks, then yield them
-            await foreach (var chunk in StreamChunksInternalAsync(message, history))
+            await foreach (var chunk in StreamChunksInternalAsync(message, history, model))
             {
                 yield return chunk;
             }
         }
 
+        private string ValidateModel(string? modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId))
+                return DefaultModel;
+
+            return ValidModels.Contains(modelId) ? modelId : DefaultModel;
+        }
+
         private async IAsyncEnumerable<StreamChunkDto> StreamChunksInternalAsync(
             string message,
-            List<MessageHistoryDto>? history)
+            List<MessageHistoryDto>? history,
+            string model)
         {
             var channel = Channel.CreateUnbounded<StreamChunkDto>();
 
@@ -53,7 +86,6 @@ namespace ChatbotAPI.Services
             var fetchTask = Task.Run(async () =>
             {
                 var httpClient = _httpClientFactory.CreateClient();
-                var model = "gemini-2.5-flash";
                 var url = $"{BaseUrl}/{model}:streamGenerateContent?key={_apiKey}&alt=sse";
 
                 // Build contents array with history
@@ -202,10 +234,11 @@ namespace ChatbotAPI.Services
 
         public async Task<string> SendMessageAsync(
             string message,
-            List<MessageHistoryDto>? history = null)
+            List<MessageHistoryDto>? history = null,
+            string? modelId = null)
         {
             var httpClient = _httpClientFactory.CreateClient();
-            var model = "gemini-2.5-flash";
+            var model = ValidateModel(modelId);
             var url = $"{BaseUrl}/{model}:generateContent?key={_apiKey}";
 
             var contents = new List<Content>();
