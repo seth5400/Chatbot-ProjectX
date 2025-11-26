@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { API_ENDPOINTS } from "@/lib/config";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Message = {
   role: "user" | "model";
@@ -456,7 +458,68 @@ export default function Home() {
                       : "bg-[#1a1a1a] text-gray-100 rounded-bl-md border border-[#2a2a2a]"
                   }`}
                 >
-                  <div className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</div>
+                  {msg.role === "user" ? (
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</div>
+                  ) : (
+                    <div className="text-sm leading-relaxed prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          // Headings
+                          h1: ({ children }) => <h1 className="text-xl font-bold mt-4 mb-2 text-white">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-lg font-bold mt-3 mb-2 text-white">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-base font-semibold mt-2 mb-1 text-white">{children}</h3>,
+                          // Paragraphs
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                          // Bold & Italic
+                          strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+                          em: ({ children }) => <em className="italic text-gray-300">{children}</em>,
+                          // Lists
+                          ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                          li: ({ children }) => <li className="text-gray-200">{children}</li>,
+                          // Code
+                          code: ({ className, children }) => {
+                            const isInline = !className;
+                            return isInline ? (
+                              <code className="bg-[#2a2a2a] text-[#ff6b35] px-1.5 py-0.5 rounded text-xs font-mono">
+                                {children}
+                              </code>
+                            ) : (
+                              <code className="block bg-[#0a0a0a] text-gray-300 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2">
+                                {children}
+                              </code>
+                            );
+                          },
+                          pre: ({ children }) => <pre className="bg-[#0a0a0a] rounded-lg overflow-x-auto my-2">{children}</pre>,
+                          // Links
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#ff6b35] hover:underline">
+                              {children}
+                            </a>
+                          ),
+                          // Blockquote
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-4 border-[#ff6b35] pl-3 my-2 text-gray-400 italic">
+                              {children}
+                            </blockquote>
+                          ),
+                          // Horizontal rule
+                          hr: () => <hr className="border-[#2a2a2a] my-4" />,
+                          // Table
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto my-2">
+                              <table className="min-w-full border border-[#2a2a2a] rounded">{children}</table>
+                            </div>
+                          ),
+                          th: ({ children }) => <th className="bg-[#2a2a2a] px-3 py-2 text-left text-white font-semibold">{children}</th>,
+                          td: ({ children }) => <td className="border-t border-[#2a2a2a] px-3 py-2">{children}</td>,
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
