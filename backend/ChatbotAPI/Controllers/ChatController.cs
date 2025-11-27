@@ -14,18 +14,18 @@ namespace ChatbotAPI.Controllers
     public class ChatController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly IGeminiService _geminiService;
+        private readonly ILiteLLMService _liteLLMService;
         private readonly ICloudinaryService _cloudinaryService;
         private readonly ILogger<ChatController> _logger;
 
         public ChatController(
             AppDbContext context,
-            IGeminiService geminiService,
+            ILiteLLMService liteLLMService,
             ICloudinaryService cloudinaryService,
             ILogger<ChatController> logger)
         {
             _context = context;
-            _geminiService = geminiService;
+            _liteLLMService = liteLLMService;
             _cloudinaryService = cloudinaryService;
             _logger = logger;
         }
@@ -184,7 +184,7 @@ namespace ChatbotAPI.Controllers
                     {
                         // Create new chat
                         // Generate AI-powered title (like ChatGPT)
-                        var chatTitle = await _geminiService.GenerateChatTitleAsync(request.Message);
+                        var chatTitle = await _liteLLMService.GenerateChatTitleAsync(request.Message);
 
                         chat = new Chat
                         {
@@ -213,7 +213,7 @@ namespace ChatbotAPI.Controllers
                     _context.Messages.Add(userMessage);
                     await _context.SaveChangesAsync();
 
-                    // เพิ่ม user message ล่าสุดเข้าไปใน history ก่อนส่งไป Gemini
+                    // เพิ่ม user message ล่าสุดเข้าไปใน history ก่อนส่งไป LiteLLM
                     if (history == null)
                     {
                         history = new List<MessageHistoryDto>();
@@ -226,10 +226,10 @@ namespace ChatbotAPI.Controllers
                     });
                 }
 
-                // Stream response from Gemini
+                // Stream response from LiteLLM
                 var fullText = new StringBuilder();
 
-                await foreach (var chunk in _geminiService.SendMessageStreamAsync(
+                await foreach (var chunk in _liteLLMService.SendMessageStreamAsync(
                     request.Message,
                     history,
                     chat?.Id,

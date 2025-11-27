@@ -7,43 +7,28 @@ using System.Threading.Channels;
 
 namespace ChatbotAPI.Services
 {
-    public class GeminiService : IGeminiService
+    public class LiteLLMService : ILiteLLMService
     {
         private readonly string _apiKey;
+        private readonly string _baseUrl;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly ILogger<GeminiService> _logger;
-        private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
+        private readonly ILogger<LiteLLMService> _logger;
 
-        public GeminiService(
+        public LiteLLMService(
             IConfiguration configuration,
             IHttpClientFactory httpClientFactory,
-            ILogger<GeminiService> logger)
+            ILogger<LiteLLMService> logger)
         {
-            _apiKey = configuration["GeminiSettings:ApiKey"]
-                ?? throw new InvalidOperationException("Gemini API key is not configured");
+            _baseUrl = configuration["LiteLLMSettings:BaseUrl"]
+                ?? throw new InvalidOperationException("LiteLLM Base URL is not configured");
+            _apiKey = configuration["LiteLLMSettings:ApiKey"]
+                ?? throw new InvalidOperationException("LiteLLM API key is not configured");
             _httpClientFactory = httpClientFactory;
             _logger = logger;
         }
 
-        // Available Gemini models (Free Tier) - Updated from API response
-        private static readonly HashSet<string> ValidModels = new()
-        {
-            // Gemini 2.5 (Latest)
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            // Gemini 2.0
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite",
-            // Gemini 3.0 Preview
-            "gemini-3-pro-preview",
-            // Latest aliases
-            "gemini-pro-latest",
-            "gemini-flash-latest",
-            "gemini-flash-lite-latest"
-        };
-
-        private const string DefaultModel = "gemini-2.5-flash";
+        // Default model - can be changed based on what's available in your LiteLLM
+        private const string DefaultModel = "gpt-4o-mini";
 
         public async IAsyncEnumerable<StreamChunkDto> SendMessageStreamAsync(
             string message,
@@ -56,8 +41,7 @@ namespace ChatbotAPI.Services
             string? imageMimeType = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            // Validate and set model
-            var model = ValidateModel(modelId);
+            var model = string.IsNullOrWhiteSpace(modelId) ? DefaultModel : modelId;
 
             // Send metadata first
             yield return new StreamChunkDto
@@ -67,99 +51,16 @@ namespace ChatbotAPI.Services
             };
 
             // Use helper method to get all chunks, then yield them
-            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, enableGrounding, systemInstruction, imageBase64, imageMimeType))
+            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, systemInstruction, imageBase64, imageMimeType))
             {
                 yield return chunk;
             }
-        }
-
-        private string ValidateModel(string? modelId)
-        {
-            if (string.IsNullOrWhiteSpace(modelId))
-                return DefaultModel;
-
-            return ValidModels.Contains(modelId) ? modelId : DefaultModel;
-        }
-
-        /// <summary>
-        /// Build parts array for a message content, supporting text and optional image
-        /// </summary>
-        private async Task<List<object>> BuildPartsAsync(string? text, string? imageBase64 = null, string? imageMimeType = null, string? imageUrl = null)
-        {
-            var parts = new List<object>();
-
-            // Add text part if provided
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                parts.Add(new { text = text });
-            }
-
-            // Add image part if provided (base64)
-            if (!string.IsNullOrWhiteSpace(imageBase64))
-            {
-                // Remove data URL prefix if present
-                var base64Data = imageBase64;
-                if (imageBase64.Contains(","))
-                {
-                    base64Data = imageBase64.Split(',')[1];
-                }
-
-                // Default to image/jpeg if no mime type provided
-                var mimeType = imageMimeType ?? "image/jpeg";
-
-                parts.Add(new
-                {
-                    inlineData = new
-                    {
-                        mimeType = mimeType,
-                        data = base64Data
-                    }
-                });
-            }
-            // If we have an image URL (from history), fetch and convert to base64
-            else if (!string.IsNullOrWhiteSpace(imageUrl))
-            {
-                try
-                {
-                    var httpClient = _httpClientFactory.CreateClient();
-                    var imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
-                    var base64Data = Convert.ToBase64String(imageBytes);
-
-                    // Detect mime type from URL or default to jpeg
-                    var mimeType = "image/jpeg";
-                    if (imageUrl.Contains(".png", StringComparison.OrdinalIgnoreCase))
-                        mimeType = "image/png";
-                    else if (imageUrl.Contains(".gif", StringComparison.OrdinalIgnoreCase))
-                        mimeType = "image/gif";
-                    else if (imageUrl.Contains(".webp", StringComparison.OrdinalIgnoreCase))
-                        mimeType = "image/webp";
-
-                    parts.Add(new
-                    {
-                        inlineData = new
-                        {
-                            mimeType = mimeType,
-                            data = base64Data
-                        }
-                    });
-
-                    _logger.LogDebug("Fetched and converted image from URL: {Url}", imageUrl);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to fetch image from URL: {Url}", imageUrl);
-                    // Continue without the image
-                }
-            }
-
-            return parts;
         }
 
         private async IAsyncEnumerable<StreamChunkDto> StreamChunksInternalAsync(
             string message,
             List<MessageHistoryDto>? history,
             string model,
-            bool enableGrounding = false,
             string? systemInstruction = null,
             string? imageBase64 = null,
             string? imageMimeType = null)
@@ -170,58 +71,89 @@ namespace ChatbotAPI.Services
             var fetchTask = Task.Run(async () =>
             {
                 var httpClient = _httpClientFactory.CreateClient();
-                var url = $"{BaseUrl}/{model}:streamGenerateContent?key={_apiKey}&alt=sse";
+                var url = $"{_baseUrl.TrimEnd('/')}/v1/chat/completions";
 
-                // Build contents array with history
-                var contents = new List<object>();
+                // Build messages array (OpenAI format)
+                var messages = new List<object>();
 
+                // Add system instruction if provided
+                if (!string.IsNullOrWhiteSpace(systemInstruction))
+                {
+                    messages.Add(new
+                    {
+                        role = "system",
+                        content = systemInstruction
+                    });
+                }
+
+                // Add history messages
                 if (history != null && history.Count > 0)
                 {
                     foreach (var msg in history)
                     {
-                        // Check if this history message has an image
-                        var parts = await BuildPartsAsync(msg.Content, null, null, msg.ImageUrl);
-                        contents.Add(new
+                        var role = msg.Role == "model" ? "assistant" : msg.Role;
+
+                        // Check if message has image
+                        if (!string.IsNullOrWhiteSpace(msg.ImageUrl))
                         {
-                            role = msg.Role,
-                            parts = parts
-                        });
+                            // OpenAI vision format with image URL
+                            messages.Add(new
+                            {
+                                role = role,
+                                content = new object[]
+                                {
+                                    new { type = "text", text = msg.Content ?? "" },
+                                    new { type = "image_url", image_url = new { url = msg.ImageUrl } }
+                                }
+                            });
+                        }
+                        else
+                        {
+                            messages.Add(new
+                            {
+                                role = role,
+                                content = msg.Content
+                            });
+                        }
                     }
                 }
 
-                // Build user message with optional image
-                var userParts = await BuildPartsAsync(message, imageBase64, imageMimeType);
-                contents.Add(new
+                // Add current user message
+                if (!string.IsNullOrWhiteSpace(imageBase64))
                 {
-                    role = "user",
-                    parts = userParts
-                });
-
-                // Build request body with optional Google Search Grounding and System Instruction
-                object? systemInstructionObj = null;
-                if (!string.IsNullOrWhiteSpace(systemInstruction))
-                {
-                    systemInstructionObj = new
+                    // User message with image (OpenAI vision format)
+                    var base64Data = imageBase64;
+                    if (imageBase64.Contains(","))
                     {
-                        parts = new[] { new { text = systemInstruction } }
-                    };
+                        base64Data = imageBase64.Split(',')[1];
+                    }
+                    var mimeType = imageMimeType ?? "image/jpeg";
+
+                    messages.Add(new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new { type = "text", text = message },
+                            new { type = "image_url", image_url = new { url = $"data:{mimeType};base64,{base64Data}" } }
+                        }
+                    });
+                }
+                else
+                {
+                    messages.Add(new
+                    {
+                        role = "user",
+                        content = message
+                    });
                 }
 
-                // Build tools array if grounding is enabled
-                object[]? toolsArray = null;
-                if (enableGrounding)
-                {
-                    toolsArray = new object[]
-                    {
-                        new { googleSearch = new { } }
-                    };
-                }
-
+                // Build request body (OpenAI format)
                 var requestBody = new
                 {
-                    system_instruction = systemInstructionObj,
-                    contents = contents,
-                    tools = toolsArray
+                    model = model,
+                    messages = messages,
+                    stream = true
                 };
 
                 var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
@@ -230,7 +162,7 @@ namespace ChatbotAPI.Services
                     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
                 });
 
-                _logger.LogDebug("Gemini request: {Request}", json.Substring(0, Math.Min(500, json.Length)));
+                _logger.LogDebug("LiteLLM request: {Request}", json.Substring(0, Math.Min(500, json.Length)));
 
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var hasError = false;
@@ -242,14 +174,16 @@ namespace ChatbotAPI.Services
                         Content = content
                     };
 
+                    // Add Authorization header (Bearer token)
+                    request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+
                     using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
                     if (!response.IsSuccessStatusCode)
                     {
                         var errorContent = await response.Content.ReadAsStringAsync();
-                        _logger.LogError("Gemini API error: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                        _logger.LogError("LiteLLM API error: {StatusCode} - {Error}", response.StatusCode, errorContent);
 
-                        // Try to write error message to channel before completing
                         try
                         {
                             await channel.Writer.WriteAsync(new StreamChunkDto
@@ -272,15 +206,22 @@ namespace ChatbotAPI.Services
                     {
                         if (line.StartsWith("data: "))
                         {
-                            var data = line.Substring(6);
+                            var data = line.Substring(6).Trim();
+
+                            // Check for stream end signal
+                            if (data == "[DONE]")
+                            {
+                                break;
+                            }
+
                             if (string.IsNullOrWhiteSpace(data)) continue;
 
                             try
                             {
-                                var chunk = JsonSerializer.Deserialize<GeminiResponse>(data);
-                                if (chunk?.Candidates != null && chunk.Candidates.Count > 0)
+                                var chunk = JsonSerializer.Deserialize<OpenAIStreamResponse>(data);
+                                if (chunk?.Choices != null && chunk.Choices.Count > 0)
                                 {
-                                    var text = chunk.Candidates[0]?.Content?.Parts?.FirstOrDefault()?.Text;
+                                    var text = chunk.Choices[0]?.Delta?.Content;
                                     if (!string.IsNullOrEmpty(text))
                                     {
                                         await channel.Writer.WriteAsync(new StreamChunkDto
@@ -311,7 +252,6 @@ namespace ChatbotAPI.Services
                 {
                     _logger.LogError(ex, "Error in StreamChunksInternalAsync");
 
-                    // Try to write error message to channel before completing
                     try
                     {
                         await channel.Writer.WriteAsync(new StreamChunkDto
@@ -326,7 +266,6 @@ namespace ChatbotAPI.Services
                 }
                 finally
                 {
-                    // Always complete the channel, but only once
                     try
                     {
                         channel.Writer.Complete();
@@ -346,13 +285,11 @@ namespace ChatbotAPI.Services
 
         /// <summary>
         /// Generate a short, concise title for a chat based on the first message
-        /// Uses AI to summarize the main topic (like ChatGPT does)
         /// </summary>
         public async Task<string> GenerateChatTitleAsync(string firstMessage, CancellationToken cancellationToken = default)
         {
             var httpClient = _httpClientFactory.CreateClient();
-            // Use fast model for title generation
-            var url = $"{BaseUrl}/gemini-2.0-flash-lite:generateContent?key={_apiKey}";
+            var url = $"{_baseUrl.TrimEnd('/')}/v1/chat/completions";
 
             var prompt = $@"สรุปข้อความนี้เป็นชื่อหัวข้อสั้นๆ ไม่เกิน 30 ตัวอักษร ภาษาเดียวกับข้อความ ไม่ต้องใส่เครื่องหมายคำพูด:
 
@@ -362,19 +299,13 @@ namespace ChatbotAPI.Services
 
             var requestBody = new
             {
-                contents = new[]
+                model = DefaultModel,
+                messages = new[]
                 {
-                    new
-                    {
-                        role = "user",
-                        parts = new[] { new { text = prompt } }
-                    }
+                    new { role = "user", content = prompt }
                 },
-                generationConfig = new
-                {
-                    maxOutputTokens = 50,
-                    temperature = 0.3
-                }
+                max_tokens = 50,
+                temperature = 0.3
             };
 
             var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
@@ -386,19 +317,24 @@ namespace ChatbotAPI.Services
 
             try
             {
-                var response = await httpClient.PostAsync(url, content, cancellationToken);
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = content
+                };
+                request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+
+                var response = await httpClient.SendAsync(request, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-                var result = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+                var result = JsonSerializer.Deserialize<OpenAIResponse>(responseJson);
 
-                var title = result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text?.Trim();
+                var title = result?.Choices?.FirstOrDefault()?.Message?.Content?.Trim();
 
                 // Clean up the title - remove quotes if present
                 if (!string.IsNullOrEmpty(title))
                 {
                     title = title.Trim('"', '\'', '"', '"', '「', '」');
-                    // Limit to 50 chars max
                     if (title.Length > 50)
                         title = title.Substring(0, 47) + "...";
                     return title;
@@ -410,7 +346,6 @@ namespace ChatbotAPI.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to generate chat title, using fallback");
-                // Fallback to truncated message
                 return firstMessage.Length > 50 ? firstMessage.Substring(0, 47) + "..." : firstMessage;
             }
         }
@@ -424,36 +359,58 @@ namespace ChatbotAPI.Services
             CancellationToken cancellationToken = default)
         {
             var httpClient = _httpClientFactory.CreateClient();
-            var model = ValidateModel(modelId);
-            var url = $"{BaseUrl}/{model}:generateContent?key={_apiKey}";
+            var model = string.IsNullOrWhiteSpace(modelId) ? DefaultModel : modelId;
+            var url = $"{_baseUrl.TrimEnd('/')}/v1/chat/completions";
 
-            // Build contents array
-            var contents = new List<object>();
+            // Build messages array
+            var messages = new List<object>();
 
             if (history != null && history.Count > 0)
             {
                 foreach (var msg in history)
                 {
-                    var parts = await BuildPartsAsync(msg.Content, null, null, msg.ImageUrl);
-                    contents.Add(new
+                    var role = msg.Role == "model" ? "assistant" : msg.Role;
+                    messages.Add(new
                     {
-                        role = msg.Role,
-                        parts = parts
+                        role = role,
+                        content = msg.Content
                     });
                 }
             }
 
-            // Build user message with optional image
-            var userParts = await BuildPartsAsync(message, imageBase64, imageMimeType);
-            contents.Add(new
+            // Add user message with optional image
+            if (!string.IsNullOrWhiteSpace(imageBase64))
             {
-                role = "user",
-                parts = userParts
-            });
+                var base64Data = imageBase64;
+                if (imageBase64.Contains(","))
+                {
+                    base64Data = imageBase64.Split(',')[1];
+                }
+                var mimeType = imageMimeType ?? "image/jpeg";
+
+                messages.Add(new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "text", text = message },
+                        new { type = "image_url", image_url = new { url = $"data:{mimeType};base64,{base64Data}" } }
+                    }
+                });
+            }
+            else
+            {
+                messages.Add(new
+                {
+                    role = "user",
+                    content = message
+                });
+            }
 
             var requestBody = new
             {
-                contents = contents
+                model = model,
+                messages = messages
             };
 
             var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
@@ -465,13 +422,19 @@ namespace ChatbotAPI.Services
 
             try
             {
-                var response = await httpClient.PostAsync(url, content, cancellationToken);
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = content
+                };
+                request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+
+                var response = await httpClient.SendAsync(request, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-                var result = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+                var result = JsonSerializer.Deserialize<OpenAIResponse>(responseJson);
 
-                return result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
+                return result?.Choices?.FirstOrDefault()?.Message?.Content ?? string.Empty;
             }
             catch (Exception ex)
             {
@@ -480,32 +443,66 @@ namespace ChatbotAPI.Services
             }
         }
 
-        // Response models
-        private class GeminiResponse
+        // OpenAI Response models (for non-streaming)
+        private class OpenAIResponse
         {
-            [JsonPropertyName("candidates")]
-            public List<Candidate>? Candidates { get; set; }
+            [JsonPropertyName("id")]
+            public string? Id { get; set; }
+
+            [JsonPropertyName("choices")]
+            public List<OpenAIChoice>? Choices { get; set; }
         }
 
-        private class Candidate
+        private class OpenAIChoice
         {
-            [JsonPropertyName("content")]
-            public ContentResponse? Content { get; set; }
+            [JsonPropertyName("index")]
+            public int Index { get; set; }
+
+            [JsonPropertyName("message")]
+            public OpenAIMessage? Message { get; set; }
+
+            [JsonPropertyName("finish_reason")]
+            public string? FinishReason { get; set; }
         }
 
-        private class ContentResponse
+        private class OpenAIMessage
         {
             [JsonPropertyName("role")]
-            public string Role { get; set; } = "model";
+            public string? Role { get; set; }
 
-            [JsonPropertyName("parts")]
-            public List<PartResponse>? Parts { get; set; }
+            [JsonPropertyName("content")]
+            public string? Content { get; set; }
         }
 
-        private class PartResponse
+        // OpenAI Streaming Response models
+        private class OpenAIStreamResponse
         {
-            [JsonPropertyName("text")]
-            public string? Text { get; set; }
+            [JsonPropertyName("id")]
+            public string? Id { get; set; }
+
+            [JsonPropertyName("choices")]
+            public List<OpenAIStreamChoice>? Choices { get; set; }
+        }
+
+        private class OpenAIStreamChoice
+        {
+            [JsonPropertyName("index")]
+            public int Index { get; set; }
+
+            [JsonPropertyName("delta")]
+            public OpenAIDelta? Delta { get; set; }
+
+            [JsonPropertyName("finish_reason")]
+            public string? FinishReason { get; set; }
+        }
+
+        private class OpenAIDelta
+        {
+            [JsonPropertyName("role")]
+            public string? Role { get; set; }
+
+            [JsonPropertyName("content")]
+            public string? Content { get; set; }
         }
     }
 }

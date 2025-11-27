@@ -17,7 +17,11 @@
       "Bash(npm run lint)",
       "Bash(npm install:*)",
       "Bash(dotnet add:*)",
-      "Bash(sqlcmd:*)"
+      "Bash(sqlcmd:*)",
+      "Bash(dir /s/b)",
+      "Bash(tree:*)",
+      "Bash(del \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\Services\\GeminiService.cs\")",
+      "Bash(del \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\Services\\IGeminiService.cs\")"
     ],
     "deny": [],
     "ask": []

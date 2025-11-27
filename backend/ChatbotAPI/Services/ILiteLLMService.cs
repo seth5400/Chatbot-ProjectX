@@ -2,7 +2,7 @@ using ChatbotAPI.DTOs;
 
 namespace ChatbotAPI.Services
 {
-    public interface IGeminiService
+    public interface ILiteLLMService
     {
         IAsyncEnumerable<StreamChunkDto> SendMessageStreamAsync(
             string message,

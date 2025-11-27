@@ -20,7 +20,7 @@ builder.Services.Configure<CloudinarySettings>(
     builder.Configuration.GetSection(CloudinarySettings.SectionName));
 
 // Register Services with Interfaces
-builder.Services.AddScoped<IGeminiService, GeminiService>();
+builder.Services.AddScoped<ILiteLLMService, LiteLLMService>();
 builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 
 // Configure Entity Framework Core with SQL Server

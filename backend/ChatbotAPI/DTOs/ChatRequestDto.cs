@@ -14,10 +14,10 @@ namespace ChatbotAPI.DTOs
         public List<MessageHistoryDto>? History { get; set; }
 
         /// <summary>
-        /// AI Model ID (e.g., "gemini-2.5-flash", "gemini-2.0-flash")
-        /// Default: "gemini-2.5-flash"
+        /// AI Model ID - depends on your LiteLLM configuration
+        /// Default: "gpt-4o-mini"
         /// </summary>
-        public string ModelId { get; set; } = "gemini-2.5-flash";
+        public string ModelId { get; set; } = "gpt-4o-mini";
 
         /// <summary>
         /// Enable Google Search Grounding for real-time data
