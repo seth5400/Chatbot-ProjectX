@@ -26,6 +26,52 @@ const AI_MODELS = [
   { id: "gemini-3-pro-preview", name: "Gemini 3 Pro (Preview)", description: "ใหม่ล่าสุด ทดลอง" },
 ];
 
+// Preset Personas
+const PERSONAS = [
+  {
+    id: "default",
+    name: "Default",
+    icon: "🤖",
+    description: "AI ปกติ ตอบทั่วไป",
+    instruction: "",
+  },
+  {
+    id: "friendly",
+    name: "เพื่อนคุย",
+    icon: "😊",
+    description: "พูดคุยเป็นกันเอง สนุกสนาน",
+    instruction: "คุณคือเพื่อนที่พูดคุยเป็นกันเอง สนุกสนาน ใช้ภาษาไม่เป็นทางการ ใส่อารมณ์ขันบ้าง แต่ยังให้ข้อมูลที่ถูกต้อง",
+  },
+  {
+    id: "professional",
+    name: "มืออาชีพ",
+    icon: "💼",
+    description: "เป็นทางการ กระชับ ตรงประเด็น",
+    instruction: "คุณคือผู้เชี่ยวชาญมืออาชีพ ตอบอย่างเป็นทางการ กระชับ ตรงประเด็น ใช้ภาษาสุภาพ ให้ข้อมูลที่ชัดเจนและแม่นยำ",
+  },
+  {
+    id: "teacher",
+    name: "ครูผู้สอน",
+    icon: "📚",
+    description: "อธิบายละเอียด เข้าใจง่าย",
+    instruction: "คุณคือครูผู้สอนที่อธิบายเรื่องยากให้เข้าใจง่าย ใช้ตัวอย่างประกอบ แบ่งเป็นขั้นตอน ใจเย็น และให้กำลังใจ",
+  },
+  {
+    id: "coder",
+    name: "โปรแกรมเมอร์",
+    icon: "💻",
+    description: "เน้นโค้ด อธิบายเทคนิค",
+    instruction: "คุณคือโปรแกรมเมอร์อาวุโส เน้นตอบด้วยโค้ดที่ถูกต้อง อธิบายเทคนิค best practices และ clean code ใส่ comment อธิบายโค้ดด้วย",
+  },
+  {
+    id: "creative",
+    name: "นักสร้างสรรค์",
+    icon: "🎨",
+    description: "คิดนอกกรอบ ไอเดียใหม่ๆ",
+    instruction: "คุณคือนักสร้างสรรค์ที่คิดนอกกรอบ ให้ไอเดียใหม่ๆ มุมมองที่แตกต่าง สร้างสรรค์ และกล้าเสนอแนวทางที่ไม่ธรรมดา",
+  },
+];
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,6 +92,10 @@ export default function Home() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
+  const [customInstruction, setCustomInstruction] = useState("");
+  const [settingsTab, setSettingsTab] = useState("personas");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -212,6 +262,18 @@ export default function Home() {
     setEditValue("");
   };
 
+  // Get current system instruction based on selected persona or custom
+  const getCurrentSystemInstruction = useCallback(() => {
+    if (customInstruction.trim()) {
+      return customInstruction;
+    }
+    if (selectedPersona) {
+      const persona = PERSONAS.find((p) => p.id === selectedPersona);
+      return persona?.instruction || "";
+    }
+    return "";
+  }, [customInstruction, selectedPersona]);
+
   // Stop generating
   const stopGenerating = () => {
     if (abortControllerRef.current) {
@@ -271,6 +333,7 @@ export default function Home() {
     abortControllerRef.current = abortController;
 
     try {
+      const systemInstruction = getCurrentSystemInstruction();
       const response = await fetch(API_ENDPOINTS.CHAT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -280,6 +343,7 @@ export default function Home() {
           temporary: isTemporary,
           modelId: selectedModel,
           enableGrounding: enableGrounding,
+          systemInstruction: systemInstruction || undefined,
           // สำหรับ temporary chat ส่ง history ไป, chat ปกติให้ backend โหลดจาก DB
           history: isTemporary ? messages : undefined,
         }),
@@ -524,6 +588,20 @@ export default function Home() {
             className="w-full py-2 px-4 bg-gradient-to-r from-[#ff6b35] to-[#ff4500] hover:from-[#ff4500] hover:to-[#ff6b35] rounded-lg text-sm font-medium transition-all"
           >
             + แชทใหม่
+          </button>
+          {/* Settings Button */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-full py-2 px-4 bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#2a2a2a] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            ตั้งค่า
+            {(selectedPersona || customInstruction) && (
+              <span className="w-2 h-2 bg-[#ff6b35] rounded-full"></span>
+            )}
           </button>
         </div>
       </aside>
@@ -850,6 +928,139 @@ export default function Home() {
           </form>
         </div>
       </main>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl w-full max-w-3xl h-[600px] flex overflow-hidden animate-fade-in">
+            {/* Left Panel - 30% */}
+            <div className="w-[30%] bg-[#141414] border-r border-[#2a2a2a] flex flex-col">
+              <div className="p-4 border-b border-[#2a2a2a]">
+                <h2 className="text-lg font-semibold text-white">ตั้งค่า</h2>
+              </div>
+              <nav className="flex-1 p-2">
+                <button
+                  onClick={() => setSettingsTab("personas")}
+                  className={`w-full text-left px-4 py-3 rounded-lg text-sm transition-all flex items-center gap-3 ${
+                    settingsTab === "personas"
+                      ? "bg-[#2a2a2a] text-white"
+                      : "text-gray-400 hover:bg-[#1f1f1f] hover:text-white"
+                  }`}
+                >
+                  <span className="text-lg">🎭</span>
+                  บุคลิก AI
+                </button>
+                <button
+                  onClick={() => setSettingsTab("custom")}
+                  className={`w-full text-left px-4 py-3 rounded-lg text-sm transition-all flex items-center gap-3 ${
+                    settingsTab === "custom"
+                      ? "bg-[#2a2a2a] text-white"
+                      : "text-gray-400 hover:bg-[#1f1f1f] hover:text-white"
+                  }`}
+                >
+                  <span className="text-lg">✏️</span>
+                  คำสั่งกำหนดเอง
+                </button>
+              </nav>
+            </div>
+
+            {/* Right Panel - 70% */}
+            <div className="w-[70%] flex flex-col">
+              {/* Header */}
+              <div className="p-4 border-b border-[#2a2a2a] flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white">
+                  {settingsTab === "personas" ? "เลือกบุคลิก AI" : "คำสั่งกำหนดเอง"}
+                </h3>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="p-2 hover:bg-[#2a2a2a] rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {settingsTab === "personas" ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {PERSONAS.map((persona) => (
+                      <button
+                        key={persona.id}
+                        onClick={() => {
+                          setSelectedPersona(persona.id === "default" ? null : persona.id);
+                          setCustomInstruction("");
+                        }}
+                        className={`p-4 rounded-xl border text-left transition-all ${
+                          (selectedPersona === persona.id) || (persona.id === "default" && !selectedPersona && !customInstruction)
+                            ? "border-[#ff6b35] bg-[#ff6b35]/10"
+                            : "border-[#2a2a2a] hover:border-[#3a3a3a] hover:bg-[#2a2a2a]/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-2xl">{persona.icon}</span>
+                          <span className="font-medium text-white">{persona.name}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">{persona.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-400">
+                      เขียนคำสั่งเพื่อกำหนดพฤติกรรมของ AI ตามที่คุณต้องการ คำสั่งนี้จะถูกใช้แทนบุคลิกที่เลือกไว้
+                    </p>
+                    <textarea
+                      value={customInstruction}
+                      onChange={(e) => {
+                        setCustomInstruction(e.target.value);
+                        if (e.target.value.trim()) {
+                          setSelectedPersona(null);
+                        }
+                      }}
+                      placeholder="เช่น: คุณคือผู้เชี่ยวชาญด้านการเงินที่ให้คำแนะนำอย่างรอบคอบ..."
+                      className="w-full h-48 p-4 bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:border-[#ff6b35] resize-none"
+                    />
+                    <div className="flex justify-between items-center text-xs text-gray-500">
+                      <span>{customInstruction.length} ตัวอักษร</span>
+                      {customInstruction && (
+                        <button
+                          onClick={() => setCustomInstruction("")}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          ล้างคำสั่ง
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-[#2a2a2a] flex justify-between items-center">
+                <div className="text-sm text-gray-500">
+                  {selectedPersona && !customInstruction && (
+                    <span>กำลังใช้: {PERSONAS.find(p => p.id === selectedPersona)?.name}</span>
+                  )}
+                  {customInstruction && (
+                    <span>กำลังใช้: คำสั่งกำหนดเอง</span>
+                  )}
+                  {!selectedPersona && !customInstruction && (
+                    <span>ใช้ค่าเริ่มต้น</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="px-6 py-2 bg-gradient-to-r from-[#ff6b35] to-[#ff4500] hover:from-[#ff4500] hover:to-[#ff6b35] text-white rounded-lg text-sm font-medium transition-all"
+                >
+                  บันทึก
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

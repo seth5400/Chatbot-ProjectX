@@ -205,7 +205,8 @@ namespace ChatbotAPI.Controllers
                     history,
                     chat?.Id,
                     request.ModelId,
-                    request.EnableGrounding))
+                    request.EnableGrounding,
+                    request.SystemInstruction))
                 {
                     var json = JsonSerializer.Serialize(chunk);
                     await Response.WriteAsync($"data: {json}\n\n");

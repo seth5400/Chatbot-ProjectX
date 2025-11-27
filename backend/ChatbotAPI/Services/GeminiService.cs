@@ -49,7 +49,8 @@ namespace ChatbotAPI.Services
             List<MessageHistoryDto>? history = null,
             string? chatId = null,
             string? modelId = null,
-            bool enableGrounding = false)
+            bool enableGrounding = false,
+            string? systemInstruction = null)
         {
             // Validate and set model
             var model = ValidateModel(modelId);
@@ -62,7 +63,7 @@ namespace ChatbotAPI.Services
             };
 
             // Use helper method to get all chunks, then yield them
-            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, enableGrounding))
+            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, enableGrounding, systemInstruction))
             {
                 yield return chunk;
             }
@@ -80,7 +81,8 @@ namespace ChatbotAPI.Services
             string message,
             List<MessageHistoryDto>? history,
             string model,
-            bool enableGrounding = false)
+            bool enableGrounding = false,
+            string? systemInstruction = null)
         {
             var channel = Channel.CreateUnbounded<StreamChunkDto>();
 
@@ -111,29 +113,35 @@ namespace ChatbotAPI.Services
                     Parts = new List<Part> { new Part { Text = message } }
                 });
 
-                // Build request body with optional Google Search Grounding
+                // Build request body with optional Google Search Grounding and System Instruction
                 object requestBody;
+
+                // Build system instruction object if provided
+                object? systemInstructionObj = null;
+                if (!string.IsNullOrWhiteSpace(systemInstruction))
+                {
+                    systemInstructionObj = new
+                    {
+                        parts = new[] { new { text = systemInstruction } }
+                    };
+                }
+
+                // Build tools array if grounding is enabled
+                object[]? toolsArray = null;
                 if (enableGrounding)
                 {
-                    requestBody = new
+                    toolsArray = new object[]
                     {
-                        contents = contents,
-                        tools = new[]
-                        {
-                            new
-                            {
-                                googleSearch = new { }
-                            }
-                        }
+                        new { googleSearch = new { } }
                     };
                 }
-                else
+
+                requestBody = new
                 {
-                    requestBody = new
-                    {
-                        contents = contents
-                    };
-                }
+                    system_instruction = systemInstructionObj,
+                    contents = contents,
+                    tools = toolsArray
+                };
 
                 var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
                 {

@@ -25,6 +25,12 @@ namespace ChatbotAPI.DTOs
         /// Default: false
         /// </summary>
         public bool EnableGrounding { get; set; } = false;
+
+        /// <summary>
+        /// System Instruction for AI personality/behavior customization
+        /// This sets the AI's persona, tone, and response style
+        /// </summary>
+        public string? SystemInstruction { get; set; }
     }
 
     public class MessageHistoryDto
