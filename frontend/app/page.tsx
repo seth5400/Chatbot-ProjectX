@@ -4,17 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { API_ENDPOINTS } from "@/lib/config";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-type Message = {
-  role: "user" | "model";
-  content: string;
-};
-
-type Chat = {
-  id: string;
-  title: string;
-  updatedAt: string;
-};
+import type { Message, Chat } from "@/types";
 
 // Available Gemini models (Updated from API)
 const AI_MODELS = [

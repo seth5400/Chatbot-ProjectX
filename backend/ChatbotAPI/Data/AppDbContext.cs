@@ -39,6 +39,9 @@ namespace ChatbotAPI.Data
                 entity.Property(e => e.Content).IsRequired().HasColumnType("nvarchar(max)");
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
                 entity.Property(e => e.ChatId).IsRequired();
+
+                // Index for faster queries by ChatId
+                entity.HasIndex(e => e.ChatId).HasDatabaseName("IX_Messages_ChatId");
             });
         }
     }

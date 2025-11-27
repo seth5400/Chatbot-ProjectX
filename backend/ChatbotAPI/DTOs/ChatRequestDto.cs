@@ -41,4 +41,9 @@ namespace ChatbotAPI.DTOs
         [Required]
         public string Content { get; set; } = string.Empty;
     }
+
+    public class CreateChatDto
+    {
+        public string? Title { get; set; }
+    }
 }

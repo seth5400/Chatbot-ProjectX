@@ -14,8 +14,8 @@ builder.Services.AddControllers()
 // Register HttpClient
 builder.Services.AddHttpClient();
 
-// Register GeminiService
-builder.Services.AddScoped<GeminiService>();
+// Register GeminiService with Interface
+builder.Services.AddScoped<IGeminiService, GeminiService>();
 
 // Configure Entity Framework Core with SQL Server
 builder.Services.AddDbContext<AppDbContext>(options =>

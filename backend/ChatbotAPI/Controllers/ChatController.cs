@@ -14,12 +14,12 @@ namespace ChatbotAPI.Controllers
     public class ChatController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly GeminiService _geminiService;
+        private readonly IGeminiService _geminiService;
         private readonly ILogger<ChatController> _logger;
 
         public ChatController(
             AppDbContext context,
-            GeminiService geminiService,
+            IGeminiService geminiService,
             ILogger<ChatController> logger)
         {
             _context = context;
@@ -332,10 +332,5 @@ namespace ChatbotAPI.Controllers
             await Response.WriteAsync($"data: {json}\n\n");
             await Response.Body.FlushAsync();
         }
-    }
-
-    public class CreateChatDto
-    {
-        public string? Title { get; set; }
     }
 }

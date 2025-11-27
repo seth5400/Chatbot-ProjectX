@@ -1,4 +1,5 @@
 using ChatbotAPI.DTOs;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -6,7 +7,7 @@ using System.Threading.Channels;
 
 namespace ChatbotAPI.Services
 {
-    public class GeminiService
+    public class GeminiService : IGeminiService
     {
         private readonly string _apiKey;
         private readonly IHttpClientFactory _httpClientFactory;
@@ -50,7 +51,8 @@ namespace ChatbotAPI.Services
             string? chatId = null,
             string? modelId = null,
             bool enableGrounding = false,
-            string? systemInstruction = null)
+            string? systemInstruction = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Validate and set model
             var model = ValidateModel(modelId);
@@ -265,7 +267,7 @@ namespace ChatbotAPI.Services
         /// Generate a short, concise title for a chat based on the first message
         /// Uses AI to summarize the main topic (like ChatGPT does)
         /// </summary>
-        public async Task<string> GenerateChatTitleAsync(string firstMessage)
+        public async Task<string> GenerateChatTitleAsync(string firstMessage, CancellationToken cancellationToken = default)
         {
             var httpClient = _httpClientFactory.CreateClient();
             // Use fast model for title generation
@@ -303,10 +305,10 @@ namespace ChatbotAPI.Services
 
             try
             {
-                var response = await httpClient.PostAsync(url, content);
+                var response = await httpClient.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseJson = await response.Content.ReadAsStringAsync();
+                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
                 var result = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
 
                 var title = result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text?.Trim();
@@ -335,7 +337,8 @@ namespace ChatbotAPI.Services
         public async Task<string> SendMessageAsync(
             string message,
             List<MessageHistoryDto>? history = null,
-            string? modelId = null)
+            string? modelId = null,
+            CancellationToken cancellationToken = default)
         {
             var httpClient = _httpClientFactory.CreateClient();
             var model = ValidateModel(modelId);
@@ -375,10 +378,10 @@ namespace ChatbotAPI.Services
 
             try
             {
-                var response = await httpClient.PostAsync(url, content);
+                var response = await httpClient.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseJson = await response.Content.ReadAsStringAsync();
+                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
                 var result = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
 
                 return result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? string.Empty;
