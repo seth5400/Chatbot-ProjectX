@@ -31,6 +31,18 @@ namespace ChatbotAPI.DTOs
         /// This sets the AI's persona, tone, and response style
         /// </summary>
         public string? SystemInstruction { get; set; }
+
+        /// <summary>
+        /// Base64 encoded image data (with or without data URL prefix)
+        /// Example: "data:image/png;base64,iVBOR..." or just "iVBOR..."
+        /// </summary>
+        public string? ImageBase64 { get; set; }
+
+        /// <summary>
+        /// MIME type of the image (e.g., "image/png", "image/jpeg")
+        /// Required when ImageBase64 is provided
+        /// </summary>
+        public string? ImageMimeType { get; set; }
     }
 
     public class MessageHistoryDto
@@ -40,6 +52,11 @@ namespace ChatbotAPI.DTOs
 
         [Required]
         public string Content { get; set; } = string.Empty;
+
+        /// <summary>
+        /// URL of the image attached to this message (for history)
+        /// </summary>
+        public string? ImageUrl { get; set; }
     }
 
     public class CreateChatDto

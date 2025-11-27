@@ -52,6 +52,8 @@ namespace ChatbotAPI.Services
             string? modelId = null,
             bool enableGrounding = false,
             string? systemInstruction = null,
+            string? imageBase64 = null,
+            string? imageMimeType = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Validate and set model
@@ -65,7 +67,7 @@ namespace ChatbotAPI.Services
             };
 
             // Use helper method to get all chunks, then yield them
-            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, enableGrounding, systemInstruction))
+            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, enableGrounding, systemInstruction, imageBase64, imageMimeType))
             {
                 yield return chunk;
             }
@@ -79,12 +81,88 @@ namespace ChatbotAPI.Services
             return ValidModels.Contains(modelId) ? modelId : DefaultModel;
         }
 
+        /// <summary>
+        /// Build parts array for a message content, supporting text and optional image
+        /// </summary>
+        private async Task<List<object>> BuildPartsAsync(string? text, string? imageBase64 = null, string? imageMimeType = null, string? imageUrl = null)
+        {
+            var parts = new List<object>();
+
+            // Add text part if provided
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                parts.Add(new { text = text });
+            }
+
+            // Add image part if provided (base64)
+            if (!string.IsNullOrWhiteSpace(imageBase64))
+            {
+                // Remove data URL prefix if present
+                var base64Data = imageBase64;
+                if (imageBase64.Contains(","))
+                {
+                    base64Data = imageBase64.Split(',')[1];
+                }
+
+                // Default to image/jpeg if no mime type provided
+                var mimeType = imageMimeType ?? "image/jpeg";
+
+                parts.Add(new
+                {
+                    inlineData = new
+                    {
+                        mimeType = mimeType,
+                        data = base64Data
+                    }
+                });
+            }
+            // If we have an image URL (from history), fetch and convert to base64
+            else if (!string.IsNullOrWhiteSpace(imageUrl))
+            {
+                try
+                {
+                    var httpClient = _httpClientFactory.CreateClient();
+                    var imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
+                    var base64Data = Convert.ToBase64String(imageBytes);
+
+                    // Detect mime type from URL or default to jpeg
+                    var mimeType = "image/jpeg";
+                    if (imageUrl.Contains(".png", StringComparison.OrdinalIgnoreCase))
+                        mimeType = "image/png";
+                    else if (imageUrl.Contains(".gif", StringComparison.OrdinalIgnoreCase))
+                        mimeType = "image/gif";
+                    else if (imageUrl.Contains(".webp", StringComparison.OrdinalIgnoreCase))
+                        mimeType = "image/webp";
+
+                    parts.Add(new
+                    {
+                        inlineData = new
+                        {
+                            mimeType = mimeType,
+                            data = base64Data
+                        }
+                    });
+
+                    _logger.LogDebug("Fetched and converted image from URL: {Url}", imageUrl);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to fetch image from URL: {Url}", imageUrl);
+                    // Continue without the image
+                }
+            }
+
+            return parts;
+        }
+
         private async IAsyncEnumerable<StreamChunkDto> StreamChunksInternalAsync(
             string message,
             List<MessageHistoryDto>? history,
             string model,
             bool enableGrounding = false,
-            string? systemInstruction = null)
+            string? systemInstruction = null,
+            string? imageBase64 = null,
+            string? imageMimeType = null)
         {
             var channel = Channel.CreateUnbounded<StreamChunkDto>();
 
@@ -95,30 +173,31 @@ namespace ChatbotAPI.Services
                 var url = $"{BaseUrl}/{model}:streamGenerateContent?key={_apiKey}&alt=sse";
 
                 // Build contents array with history
-                var contents = new List<Content>();
+                var contents = new List<object>();
 
                 if (history != null && history.Count > 0)
                 {
                     foreach (var msg in history)
                     {
-                        contents.Add(new Content
+                        // Check if this history message has an image
+                        var parts = await BuildPartsAsync(msg.Content, null, null, msg.ImageUrl);
+                        contents.Add(new
                         {
-                            Role = msg.Role,
-                            Parts = new List<Part> { new Part { Text = msg.Content } }
+                            role = msg.Role,
+                            parts = parts
                         });
                     }
                 }
 
-                contents.Add(new Content
+                // Build user message with optional image
+                var userParts = await BuildPartsAsync(message, imageBase64, imageMimeType);
+                contents.Add(new
                 {
-                    Role = "user",
-                    Parts = new List<Part> { new Part { Text = message } }
+                    role = "user",
+                    parts = userParts
                 });
 
                 // Build request body with optional Google Search Grounding and System Instruction
-                object requestBody;
-
-                // Build system instruction object if provided
                 object? systemInstructionObj = null;
                 if (!string.IsNullOrWhiteSpace(systemInstruction))
                 {
@@ -138,7 +217,7 @@ namespace ChatbotAPI.Services
                     };
                 }
 
-                requestBody = new
+                var requestBody = new
                 {
                     system_instruction = systemInstructionObj,
                     contents = contents,
@@ -150,6 +229,8 @@ namespace ChatbotAPI.Services
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
                 });
+
+                _logger.LogDebug("Gemini request: {Request}", json.Substring(0, Math.Min(500, json.Length)));
 
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var hasError = false;
@@ -338,30 +419,36 @@ namespace ChatbotAPI.Services
             string message,
             List<MessageHistoryDto>? history = null,
             string? modelId = null,
+            string? imageBase64 = null,
+            string? imageMimeType = null,
             CancellationToken cancellationToken = default)
         {
             var httpClient = _httpClientFactory.CreateClient();
             var model = ValidateModel(modelId);
             var url = $"{BaseUrl}/{model}:generateContent?key={_apiKey}";
 
-            var contents = new List<Content>();
+            // Build contents array
+            var contents = new List<object>();
 
             if (history != null && history.Count > 0)
             {
                 foreach (var msg in history)
                 {
-                    contents.Add(new Content
+                    var parts = await BuildPartsAsync(msg.Content, null, null, msg.ImageUrl);
+                    contents.Add(new
                     {
-                        Role = msg.Role,
-                        Parts = new List<Part> { new Part { Text = msg.Content } }
+                        role = msg.Role,
+                        parts = parts
                     });
                 }
             }
 
-            contents.Add(new Content
+            // Build user message with optional image
+            var userParts = await BuildPartsAsync(message, imageBase64, imageMimeType);
+            contents.Add(new
             {
-                Role = "user",
-                Parts = new List<Part> { new Part { Text = message } }
+                role = "user",
+                parts = userParts
             });
 
             var requestBody = new
@@ -403,19 +490,19 @@ namespace ChatbotAPI.Services
         private class Candidate
         {
             [JsonPropertyName("content")]
-            public Content? Content { get; set; }
+            public ContentResponse? Content { get; set; }
         }
 
-        private class Content
+        private class ContentResponse
         {
             [JsonPropertyName("role")]
-            public string Role { get; set; } = "user";
+            public string Role { get; set; } = "model";
 
             [JsonPropertyName("parts")]
-            public List<Part>? Parts { get; set; }
+            public List<PartResponse>? Parts { get; set; }
         }
 
-        private class Part
+        private class PartResponse
         {
             [JsonPropertyName("text")]
             public string? Text { get; set; }

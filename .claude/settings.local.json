@@ -15,7 +15,9 @@
       "Bash(dotnet --list-sdks:*)",
       "Bash(npx tsc --noEmit)",
       "Bash(npm run lint)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(dotnet add:*)",
+      "Bash(sqlcmd:*)"
     ],
     "deny": [],
     "ask": []

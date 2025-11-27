@@ -3,17 +3,28 @@
 @tailwind utilities;
 
 :root {
-  --background: #0a0a0a; /* Dark Black */
-  --foreground: #fafafa; /* Off White */
-  --primary-orange: #ff6b35; /* Orange */
-  --primary-orange-dark: #ff4500;
-  --primary-orange-light: #ff8c61;
-  --sidebar-bg: #141414;
-  --sidebar-hover: #1f1f1f;
-  --chat-bg: #0a0a0a;
-  --message-user-bg: linear-gradient(135deg, #ff6b35 0%, #ff4500 100%);
-  --message-bot-bg: #1a1a1a;
-  --border-color: #2a2a2a;
+  /* Material Modern Style - Soft & Friendly */
+  --background: #0f0f0f;
+  --background-secondary: #1a1a1a;
+  --foreground: #ffffff;
+  --foreground-secondary: #9ca3af;
+
+  /* Gofive Orange - Softer tones */
+  --primary: #f97316;
+  --primary-light: #fdba74;
+  --primary-dark: #ea580c;
+  --primary-soft: rgba(249, 115, 22, 0.15);
+
+  /* Surface colors - Softer */
+  --surface: #1a1a1a;
+  --surface-elevated: #262626;
+  --surface-hover: #2a2a2a;
+  --border: #2a2a2a;
+  --border-hover: #3a3a3a;
+
+  /* Accent colors */
+  --success: #22c55e;
+  --error: #ef4444;
 }
 
 body {
@@ -25,7 +36,7 @@ body {
   overflow: hidden;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar - Softer */
 .scrollbar-custom::-webkit-scrollbar {
   width: 6px;
 }
@@ -35,37 +46,61 @@ body {
 }
 
 .scrollbar-custom::-webkit-scrollbar-thumb {
-  background: #2a2a2a;
-  border-radius: 3px;
+  background: #3a3a3a;
+  border-radius: 10px;
 }
 
 .scrollbar-custom::-webkit-scrollbar-thumb:hover {
-  background: #3a3a3a;
+  background: #4a4a4a;
 }
 
 /* Smooth transitions */
 * {
-  transition-property: background-color, border-color, color, fill, stroke;
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+  transition-duration: 200ms;
 }
 
 /* Animations */
 @keyframes slideIn {
   from {
     transform: translateX(-100%);
+    opacity: 0;
   }
   to {
     transform: translateX(0);
+    opacity: 1;
   }
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
+    transform: scale(0.95);
   }
   to {
     opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
   }
 }
 
@@ -75,4 +110,27 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Material-style focus ring */
+.focus-ring {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.3);
+}
+
+/* Soft shadows */
+.shadow-soft {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.2);
 }

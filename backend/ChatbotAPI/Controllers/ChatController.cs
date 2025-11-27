@@ -15,15 +15,18 @@ namespace ChatbotAPI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IGeminiService _geminiService;
+        private readonly ICloudinaryService _cloudinaryService;
         private readonly ILogger<ChatController> _logger;
 
         public ChatController(
             AppDbContext context,
             IGeminiService geminiService,
+            ICloudinaryService cloudinaryService,
             ILogger<ChatController> logger)
         {
             _context = context;
             _geminiService = geminiService;
+            _cloudinaryService = cloudinaryService;
             _logger = logger;
         }
 
@@ -98,6 +101,7 @@ namespace ChatbotAPI.Controllers
                             Id = m.Id,
                             Role = m.Role,
                             Content = m.Content,
+                            ImageUrl = m.ImageUrl,
                             CreatedAt = m.CreatedAt
                         })
                         .ToList()
@@ -124,6 +128,27 @@ namespace ChatbotAPI.Controllers
 
                 Chat? chat = null;
                 List<MessageHistoryDto>? history = request.History;
+                string? uploadedImageUrl = null;
+                string? uploadedImagePublicId = null;
+
+                // Upload image to Cloudinary if provided
+                if (!string.IsNullOrWhiteSpace(request.ImageBase64))
+                {
+                    _logger.LogInformation("Uploading image to Cloudinary...");
+                    var uploadResult = await _cloudinaryService.UploadImageFromBase64Async(request.ImageBase64);
+
+                    if (uploadResult.Success)
+                    {
+                        uploadedImageUrl = uploadResult.Url;
+                        uploadedImagePublicId = uploadResult.PublicId;
+                        _logger.LogInformation("Image uploaded successfully: {Url}", uploadedImageUrl);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to upload image: {Error}", uploadResult.Error);
+                        // Continue without image, but log the error
+                    }
+                }
 
                 // Handle non-temporary chat
                 if (!request.Temporary)
@@ -149,7 +174,8 @@ namespace ChatbotAPI.Controllers
                                 .Select(m => new MessageHistoryDto
                                 {
                                     Role = m.Role,
-                                    Content = m.Content
+                                    Content = m.Content,
+                                    ImageUrl = m.ImageUrl
                                 })
                                 .ToList();
                         }
@@ -172,12 +198,14 @@ namespace ChatbotAPI.Controllers
                         await _context.SaveChangesAsync();
                     }
 
-                    // Save user message
+                    // Save user message with image URL if uploaded
                     var userMessage = new Message
                     {
                         Id = Guid.NewGuid().ToString(),
                         Role = "user",
                         Content = request.Message,
+                        ImageUrl = uploadedImageUrl,
+                        ImagePublicId = uploadedImagePublicId,
                         ChatId = chat.Id,
                         CreatedAt = DateTime.UtcNow
                     };
@@ -193,7 +221,8 @@ namespace ChatbotAPI.Controllers
                     history.Add(new MessageHistoryDto
                     {
                         Role = "user",
-                        Content = request.Message
+                        Content = request.Message,
+                        ImageUrl = uploadedImageUrl
                     });
                 }
 
@@ -206,7 +235,9 @@ namespace ChatbotAPI.Controllers
                     chat?.Id,
                     request.ModelId,
                     request.EnableGrounding,
-                    request.SystemInstruction))
+                    request.SystemInstruction,
+                    request.ImageBase64,
+                    request.ImageMimeType))
                 {
                     var json = JsonSerializer.Serialize(chunk);
                     await Response.WriteAsync($"data: {json}\n\n");
@@ -239,6 +270,38 @@ namespace ChatbotAPI.Controllers
             {
                 _logger.LogError(ex, "Error sending message");
                 await WriteStreamError(ex.Message);
+            }
+        }
+
+        // POST: api/chat/upload - Upload image endpoint (for separate image upload)
+        [HttpPost("upload")]
+        [RequestSizeLimit(Constants.ImageConstants.MaxFileSizeBytes)]
+        public async Task<ActionResult<ImageUploadResultDto>> UploadImage(IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new ImageUploadResultDto { Success = false, Error = "No file provided" });
+                }
+
+                var result = await _cloudinaryService.UploadImageAsync(file);
+
+                if (result.Success)
+                {
+                    return Ok(result);
+                }
+
+                return BadRequest(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading image");
+                return StatusCode(500, new ImageUploadResultDto
+                {
+                    Success = false,
+                    Error = ex.Message
+                });
             }
         }
 
@@ -301,11 +364,22 @@ namespace ChatbotAPI.Controllers
         {
             try
             {
-                var chat = await _context.Chats.FindAsync(id);
+                var chat = await _context.Chats
+                    .Include(c => c.Messages)
+                    .FirstOrDefaultAsync(c => c.Id == id);
 
                 if (chat == null)
                 {
                     return NotFound(new { message = "Chat not found" });
+                }
+
+                // Delete images from Cloudinary
+                foreach (var message in chat.Messages)
+                {
+                    if (!string.IsNullOrEmpty(message.ImagePublicId))
+                    {
+                        await _cloudinaryService.DeleteImageAsync(message.ImagePublicId);
+                    }
                 }
 
                 _context.Chats.Remove(chat);
