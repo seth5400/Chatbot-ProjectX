@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { API_ENDPOINTS } from "@/lib/config";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -44,6 +44,8 @@ export default function Home() {
   const [editValue, setEditValue] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -54,13 +56,29 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // กำหนด loadChats ก่อน useEffect ที่เรียกใช้
+  const loadChats = useCallback(async (search?: string) => {
+    try {
+      const url = search?.trim()
+        ? API_ENDPOINTS.CHAT_SEARCH(search)
+        : API_ENDPOINTS.CHAT;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to load chats");
+      const data = await response.json();
+      setChats(data || []);
+    } catch (error) {
+      console.error("Failed to load chats:", error);
+    }
+  }, []);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  // โหลด chats ครั้งแรก
   useEffect(() => {
     loadChats();
-  }, []);
+  }, [loadChats]);
 
   // Close menu and model dropdown when clicking outside
   useEffect(() => {
@@ -76,16 +94,19 @@ export default function Home() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const loadChats = async () => {
-    try {
-      const response = await fetch(API_ENDPOINTS.CHAT);
-      if (!response.ok) throw new Error("Failed to load chats");
-      const data = await response.json();
-      setChats(data || []);
-    } catch (error) {
-      console.error("Failed to load chats:", error);
-    }
-  };
+  // Debounced search - รอ 300ms หลังจากพิมพ์เสร็จแล้วค่อย search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.trim()) {
+        setIsSearching(true);
+        loadChats(searchQuery).finally(() => setIsSearching(false));
+      } else {
+        loadChats();
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, loadChats]);
 
   const loadChat = async (chatId: string) => {
     try {
@@ -344,13 +365,71 @@ export default function Home() {
           isSidebarOpen ? "w-64" : "w-0"
         } bg-[#141414] border-r border-[#2a2a2a] flex flex-col transition-all duration-300 overflow-hidden`}
       >
-        <div className="p-4 border-b border-[#2a2a2a] flex items-center justify-between">
-          <h2 className="text-lg font-semibold bg-gradient-to-r from-[#ff6b35] to-[#ff4500] bg-clip-text text-transparent">
+        <div className="p-4 border-b border-[#2a2a2a]">
+          <h2 className="text-lg font-semibold bg-gradient-to-r from-[#ff6b35] to-[#ff4500] bg-clip-text text-transparent mb-3">
             แชททั้งหมด
           </h2>
+          {/* Search Input */}
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ค้นหาแชท..."
+              className="w-full pl-9 pr-8 py-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#ff6b35] transition-colors"
+            />
+            {/* Search Icon */}
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            {/* Clear button */}
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-[#2a2a2a] rounded transition-colors"
+              >
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            {/* Loading indicator */}
+            {isSearching && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-[#ff6b35] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto scrollbar-custom p-2">
+          {/* No results message */}
+          {chats.length === 0 && searchQuery && !isSearching && (
+            <div className="text-center py-8 text-gray-500">
+              <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <p className="text-sm">ไม่พบแชทที่ค้นหา</p>
+              <p className="text-xs mt-1">&quot;{searchQuery}&quot;</p>
+            </div>
+          )}
+          {/* Empty state - no chats at all */}
+          {chats.length === 0 && !searchQuery && (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-sm">ยังไม่มีแชท</p>
+              <p className="text-xs mt-1">กดปุ่ม &quot;+ แชทใหม่&quot; เพื่อเริ่มต้น</p>
+            </div>
+          )}
           {chats.map((chat) => (
             <div
               key={chat.id}

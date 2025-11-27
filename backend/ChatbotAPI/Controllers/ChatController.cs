@@ -28,13 +28,28 @@ namespace ChatbotAPI.Controllers
         }
 
         // GET: api/chat
+        // Optional query parameter: ?search=keyword
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ChatListDto>>> GetChats()
+        public async Task<ActionResult<IEnumerable<ChatListDto>>> GetChats([FromQuery] string? search)
         {
             try
             {
-                var chats = await _context.Chats
+                var query = _context.Chats
                     .Include(c => c.Messages)
+                    .AsQueryable();
+
+                // ถ้ามี search keyword ให้ค้นหา
+                // SQL Server default collation เป็น case-insensitive อยู่แล้ว
+                // ไม่ต้องใช้ ToLower() ซึ่งจะทำให้ไม่สามารถใช้ Index ได้
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    query = query.Where(c =>
+                        c.Title.Contains(search) ||
+                        c.Messages.Any(m => m.Content.Contains(search))
+                    );
+                }
+
+                var chats = await query
                     .OrderByDescending(c => c.UpdatedAt)
                     .Select(c => new ChatListDto
                     {

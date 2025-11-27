@@ -3,6 +3,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost
 
 export const API_ENDPOINTS = {
   CHAT: `${API_BASE_URL}/api/chat`,
+  CHAT_SEARCH: (query: string) => `${API_BASE_URL}/api/chat?search=${encodeURIComponent(query)}`,
   CHAT_BY_ID: (id: string) => `${API_BASE_URL}/api/chat/${id}`,
   CHAT_NEW: `${API_BASE_URL}/api/chat/new`,
 };
