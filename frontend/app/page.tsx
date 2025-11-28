@@ -6,14 +6,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Message, Chat } from "@/types";
 
-// Available Gemini models (Updated from API)
+// Available AI models via LiteLLM (based on your API key access)
 const AI_MODELS = [
-  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "แนะนำ - เร็วและฉลาด" },
-  { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", description: "เร็วที่สุด ประหยัด" },
-  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "ฉลาดที่สุด" },
-  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", description: "เสถียร เร็ว" },
-  { id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash Lite", description: "เสถียร ประหยัด" },
-  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro (Preview)", description: "ใหม่ล่าสุด ทดลอง" },
+  { id: "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest", name: "Typhoon 2.5", description: "Thai AI Model - แนะนำ" },
 ];
 
 // Preset Personas
@@ -73,9 +68,8 @@ export default function Home() {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [selectedModel, setSelectedModel] = useState("ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  const [enableGrounding, setEnableGrounding] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -86,16 +80,10 @@ export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
   const [customInstruction, setCustomInstruction] = useState("");
   const [settingsTab, setSettingsTab] = useState("personas");
-  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
-  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<{ file: File; preview: string; base64: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
-  const toolsMenuRef = useRef<HTMLDivElement>(null);
-  const attachMenuRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
@@ -131,12 +119,6 @@ export default function Home() {
       }
       if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
         setIsModelDropdownOpen(false);
-      }
-      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target as Node)) {
-        setIsToolsMenuOpen(false);
-      }
-      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
-        setIsAttachMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -293,91 +275,16 @@ export default function Home() {
     }, 100);
   };
 
-  // Image handling functions
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
-  };
-
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      alert("รองรับเฉพาะไฟล์รูปภาพ: JPEG, PNG, GIF, WebP");
-      return;
-    }
-
-    // Validate file size (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert("ขนาดไฟล์ต้องไม่เกิน 10MB");
-      return;
-    }
-
-    try {
-      const base64 = await fileToBase64(file);
-      const preview = URL.createObjectURL(file);
-      setSelectedImage({ file, preview, base64 });
-      setIsAttachMenuOpen(false);
-    } catch (error) {
-      console.error("Error reading file:", error);
-      alert("เกิดข้อผิดพลาดในการอ่านไฟล์");
-    }
-
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (const item of items) {
-      if (item.type.startsWith("image/")) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) continue;
-
-        try {
-          const base64 = await fileToBase64(file);
-          const preview = URL.createObjectURL(file);
-          setSelectedImage({ file, preview, base64 });
-        } catch (error) {
-          console.error("Error reading pasted image:", error);
-        }
-        break;
-      }
-    }
-  };
-
-  const removeSelectedImage = () => {
-    if (selectedImage?.preview) {
-      URL.revokeObjectURL(selectedImage.preview);
-    }
-    setSelectedImage(null);
-  };
-
   const sendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if ((!input.trim() && !selectedImage) || isLoading) return;
+    if (!input.trim() || isLoading) return;
 
     const currentInput = input;
-    const currentImage = selectedImage;
     setInput("");
-    setSelectedImage(null);
 
     const userMessage: Message = {
       role: "user",
       content: currentInput,
-      imageUrl: currentImage?.preview,
     };
 
     setMessages((prev) => [...prev, userMessage, { role: "model", content: "" }]);
@@ -393,15 +300,12 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: currentInput || "อธิบายรูปภาพนี้",
+          message: currentInput,
           chatId: currentChatId,
           temporary: isTemporary,
           modelId: selectedModel,
-          enableGrounding: enableGrounding,
           systemInstruction: systemInstruction || undefined,
           history: isTemporary ? messages : undefined,
-          imageBase64: currentImage?.base64,
-          imageMimeType: currentImage?.file.type,
         }),
         signal: abortController.signal,
       });
@@ -734,16 +638,6 @@ export default function Home() {
                     <div className={`group relative ${msg.role === "user" ? "max-w-lg" : "w-full"}`}>
                       {msg.role === "user" ? (
                         <div className="bg-orange-500 text-white px-5 py-3 rounded-2xl rounded-br-md shadow-md">
-                          {/* Display attached image */}
-                          {msg.imageUrl && (
-                            <div className="mb-2">
-                              <img
-                                src={msg.imageUrl}
-                                alt="Attached"
-                                className="max-w-full max-h-48 rounded-lg object-contain"
-                              />
-                            </div>
-                          )}
                           <div className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</div>
                         </div>
                       ) : (
@@ -868,34 +762,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Input Area - Original balanced design */}
+        {/* Input Area - Simple */}
         <div className="border-t border-[#1a1a1a] p-4">
           <form onSubmit={sendMessage} className="max-w-3xl mx-auto">
-            <div className={`bg-[#1a1a1a] rounded-2xl border-2 ${(input.trim() || selectedImage) ? 'border-orange-500/50' : 'border-[#252525]'} transition-all shadow-lg`}>
-              {/* Image Preview */}
-              {selectedImage && (
-                <div className="p-3 border-b border-[#252525]">
-                  <div className="relative inline-block">
-                    <img
-                      src={selectedImage.preview}
-                      alt="Preview"
-                      className="max-h-32 rounded-lg object-contain"
-                    />
-                    <button
-                      type="button"
-                      onClick={removeSelectedImage}
-                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white transition-colors"
-                      title="ลบรูปภาพ"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">{selectedImage.file.name}</p>
-                </div>
-              )}
-
+            <div className={`bg-[#1a1a1a] rounded-2xl border-2 ${input.trim() ? 'border-orange-500/50' : 'border-[#252525]'} transition-all shadow-lg`}>
               {/* Textarea */}
               <div className="p-4">
                 <textarea
@@ -911,8 +781,7 @@ export default function Home() {
                       sendMessage();
                     }
                   }}
-                  onPaste={handlePaste}
-                  placeholder={selectedImage ? "เพิ่มคำถามเกี่ยวกับรูปภาพ... (หรือกด Enter เพื่อส่ง)" : "พิมพ์ข้อความ... (Ctrl+V เพื่อวางรูปภาพ)"}
+                  placeholder="พิมพ์ข้อความ..."
                   disabled={isLoading}
                   rows={1}
                   className="w-full bg-transparent text-white text-base placeholder-gray-500 focus:outline-none resize-none"
@@ -920,102 +789,10 @@ export default function Home() {
                 />
               </div>
 
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-
               {/* Bottom toolbar */}
               <div className="flex items-center justify-between px-4 py-3 border-t border-[#252525]">
-                {/* Left buttons */}
-                <div className="flex items-center gap-2">
-                  {/* Attach button with dropdown */}
-                  <div className="relative" ref={attachMenuRef}>
-                    <button
-                      type="button"
-                      onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
-                      className={`p-2 rounded-xl transition-colors ${
-                        selectedImage
-                          ? 'bg-orange-500/15 text-orange-400'
-                          : 'hover:bg-[#252525] text-gray-500 hover:text-gray-300'
-                      }`}
-                      title="แนบรูปภาพ"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-
-                    {isAttachMenuOpen && (
-                      <div className="absolute bottom-full left-0 mb-2 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl shadow-xl z-50 w-52 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-[#252525] transition-colors"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span>อัพโหลดรูปภาพ</span>
-                        </button>
-                        <div className="px-4 py-2 text-xs text-gray-500 border-t border-[#2a2a2a]">
-                          หรือกด Ctrl+V เพื่อวางรูปภาพ
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="relative" ref={toolsMenuRef}>
-                    <button
-                      type="button"
-                      onClick={() => setIsToolsMenuOpen(!isToolsMenuOpen)}
-                      className={`p-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                        enableGrounding
-                          ? 'bg-orange-500/15 text-orange-400'
-                          : 'hover:bg-[#252525] text-gray-500 hover:text-gray-300'
-                      }`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      <span className="text-sm">ค้นหาเว็บ</span>
-                      {enableGrounding && (
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </button>
-
-                    {isToolsMenuOpen && (
-                      <div className="absolute bottom-full left-0 mb-2 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl shadow-xl z-50 w-52 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEnableGrounding(!enableGrounding);
-                            setIsToolsMenuOpen(false);
-                          }}
-                          className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors ${
-                            enableGrounding ? 'bg-orange-500/15 text-orange-400' : 'hover:bg-[#252525] text-gray-300'
-                          }`}
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                          <span>ค้นหา Google</span>
-                          {enableGrounding && (
-                            <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {/* Left - Empty for now */}
+                <div></div>
 
                 {/* Right buttons */}
                 <div className="flex items-center gap-2">
@@ -1025,7 +802,7 @@ export default function Home() {
                       onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
                       className="flex items-center gap-2 px-3 py-2 hover:bg-[#252525] rounded-xl text-sm text-gray-400 hover:text-gray-200 transition-colors"
                     >
-                      <span>{AI_MODELS.find(m => m.id === selectedModel)?.name.replace('Gemini ', '') || "Model"}</span>
+                      <span>{AI_MODELS.find(m => m.id === selectedModel)?.name || "Model"}</span>
                       <svg className={`w-4 h-4 transition-transform ${isModelDropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
@@ -1069,9 +846,9 @@ export default function Home() {
                   ) : (
                     <button
                       type="submit"
-                      disabled={!input.trim() && !selectedImage}
+                      disabled={!input.trim()}
                       className={`p-2.5 rounded-xl transition-all ${
-                        (input.trim() || selectedImage)
+                        input.trim()
                           ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/25'
                           : 'bg-[#252525] text-gray-600 cursor-not-allowed'
                       }`}

@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using ChatbotAPI.Data;
-using ChatbotAPI.Settings;
 using ChatbotAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,13 +14,8 @@ builder.Services.AddControllers()
 // Register HttpClient
 builder.Services.AddHttpClient();
 
-// Configure Settings from appsettings.json
-builder.Services.Configure<CloudinarySettings>(
-    builder.Configuration.GetSection(CloudinarySettings.SectionName));
-
 // Register Services with Interfaces
 builder.Services.AddScoped<ILiteLLMService, LiteLLMService>();
-builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 
 // Configure Entity Framework Core with SQL Server
 builder.Services.AddDbContext<AppDbContext>(options =>

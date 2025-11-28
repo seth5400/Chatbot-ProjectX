@@ -27,18 +27,15 @@ namespace ChatbotAPI.Services
             _logger = logger;
         }
 
-        // Default model - can be changed based on what's available in your LiteLLM
-        private const string DefaultModel = "gpt-4o-mini";
+        // Default model - based on your LiteLLM API key access
+        private const string DefaultModel = "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest";
 
         public async IAsyncEnumerable<StreamChunkDto> SendMessageStreamAsync(
             string message,
             List<MessageHistoryDto>? history = null,
             string? chatId = null,
             string? modelId = null,
-            bool enableGrounding = false,
             string? systemInstruction = null,
-            string? imageBase64 = null,
-            string? imageMimeType = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var model = string.IsNullOrWhiteSpace(modelId) ? DefaultModel : modelId;
@@ -51,7 +48,7 @@ namespace ChatbotAPI.Services
             };
 
             // Use helper method to get all chunks, then yield them
-            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, systemInstruction, imageBase64, imageMimeType))
+            await foreach (var chunk in StreamChunksInternalAsync(message, history, model, systemInstruction))
             {
                 yield return chunk;
             }
@@ -61,9 +58,7 @@ namespace ChatbotAPI.Services
             string message,
             List<MessageHistoryDto>? history,
             string model,
-            string? systemInstruction = null,
-            string? imageBase64 = null,
-            string? imageMimeType = null)
+            string? systemInstruction = null)
         {
             var channel = Channel.CreateUnbounded<StreamChunkDto>();
 
@@ -92,61 +87,20 @@ namespace ChatbotAPI.Services
                     foreach (var msg in history)
                     {
                         var role = msg.Role == "model" ? "assistant" : msg.Role;
-
-                        // Check if message has image
-                        if (!string.IsNullOrWhiteSpace(msg.ImageUrl))
+                        messages.Add(new
                         {
-                            // OpenAI vision format with image URL
-                            messages.Add(new
-                            {
-                                role = role,
-                                content = new object[]
-                                {
-                                    new { type = "text", text = msg.Content ?? "" },
-                                    new { type = "image_url", image_url = new { url = msg.ImageUrl } }
-                                }
-                            });
-                        }
-                        else
-                        {
-                            messages.Add(new
-                            {
-                                role = role,
-                                content = msg.Content
-                            });
-                        }
+                            role = role,
+                            content = msg.Content
+                        });
                     }
                 }
 
                 // Add current user message
-                if (!string.IsNullOrWhiteSpace(imageBase64))
+                messages.Add(new
                 {
-                    // User message with image (OpenAI vision format)
-                    var base64Data = imageBase64;
-                    if (imageBase64.Contains(","))
-                    {
-                        base64Data = imageBase64.Split(',')[1];
-                    }
-                    var mimeType = imageMimeType ?? "image/jpeg";
-
-                    messages.Add(new
-                    {
-                        role = "user",
-                        content = new object[]
-                        {
-                            new { type = "text", text = message },
-                            new { type = "image_url", image_url = new { url = $"data:{mimeType};base64,{base64Data}" } }
-                        }
-                    });
-                }
-                else
-                {
-                    messages.Add(new
-                    {
-                        role = "user",
-                        content = message
-                    });
-                }
+                    role = "user",
+                    content = message
+                });
 
                 // Build request body (OpenAI format)
                 var requestBody = new
@@ -354,8 +308,6 @@ namespace ChatbotAPI.Services
             string message,
             List<MessageHistoryDto>? history = null,
             string? modelId = null,
-            string? imageBase64 = null,
-            string? imageMimeType = null,
             CancellationToken cancellationToken = default)
         {
             var httpClient = _httpClientFactory.CreateClient();
@@ -378,34 +330,12 @@ namespace ChatbotAPI.Services
                 }
             }
 
-            // Add user message with optional image
-            if (!string.IsNullOrWhiteSpace(imageBase64))
+            // Add user message
+            messages.Add(new
             {
-                var base64Data = imageBase64;
-                if (imageBase64.Contains(","))
-                {
-                    base64Data = imageBase64.Split(',')[1];
-                }
-                var mimeType = imageMimeType ?? "image/jpeg";
-
-                messages.Add(new
-                {
-                    role = "user",
-                    content = new object[]
-                    {
-                        new { type = "text", text = message },
-                        new { type = "image_url", image_url = new { url = $"data:{mimeType};base64,{base64Data}" } }
-                    }
-                });
-            }
-            else
-            {
-                messages.Add(new
-                {
-                    role = "user",
-                    content = message
-                });
-            }
+                role = "user",
+                content = message
+            });
 
             var requestBody = new
             {

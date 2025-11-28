@@ -8,8 +8,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Gemini AI Chat",
-  description: "Chat with Gemini AI",
+  title: "Chatbot AI",
+  description: "Chat with AI powered by LiteLLM",
 };
 
 export default function RootLayout({

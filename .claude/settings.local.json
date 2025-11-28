@@ -21,7 +21,10 @@
       "Bash(dir /s/b)",
       "Bash(tree:*)",
       "Bash(del \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\Services\\GeminiService.cs\")",
-      "Bash(del \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\Services\\IGeminiService.cs\")"
+      "Bash(del \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\Services\\IGeminiService.cs\")",
+      "Bash(del \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\README.md\")",
+      "Bash(del \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\SETUP.md\")",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

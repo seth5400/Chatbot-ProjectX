@@ -15,34 +15,15 @@ namespace ChatbotAPI.DTOs
 
         /// <summary>
         /// AI Model ID - depends on your LiteLLM configuration
-        /// Default: "gpt-4o-mini"
+        /// Default: "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest"
         /// </summary>
-        public string ModelId { get; set; } = "gpt-4o-mini";
-
-        /// <summary>
-        /// Enable Google Search Grounding for real-time data
-        /// When enabled, AI can search Google to get current information (e.g., exchange rates, news)
-        /// Default: false
-        /// </summary>
-        public bool EnableGrounding { get; set; } = false;
+        public string ModelId { get; set; } = "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest";
 
         /// <summary>
         /// System Instruction for AI personality/behavior customization
         /// This sets the AI's persona, tone, and response style
         /// </summary>
         public string? SystemInstruction { get; set; }
-
-        /// <summary>
-        /// Base64 encoded image data (with or without data URL prefix)
-        /// Example: "data:image/png;base64,iVBOR..." or just "iVBOR..."
-        /// </summary>
-        public string? ImageBase64 { get; set; }
-
-        /// <summary>
-        /// MIME type of the image (e.g., "image/png", "image/jpeg")
-        /// Required when ImageBase64 is provided
-        /// </summary>
-        public string? ImageMimeType { get; set; }
     }
 
     public class MessageHistoryDto
@@ -52,11 +33,6 @@ namespace ChatbotAPI.DTOs
 
         [Required]
         public string Content { get; set; } = string.Empty;
-
-        /// <summary>
-        /// URL of the image attached to this message (for history)
-        /// </summary>
-        public string? ImageUrl { get; set; }
     }
 
     public class CreateChatDto
