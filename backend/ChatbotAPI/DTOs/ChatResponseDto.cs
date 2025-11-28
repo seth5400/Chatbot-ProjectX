@@ -33,6 +33,34 @@ namespace ChatbotAPI.DTOs
         public string Role { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
+
+        // Version tracking fields
+        public string? ParentMessageId { get; set; }
+        public int VersionNumber { get; set; } = 1;
+        public bool IsActive { get; set; } = true;
+        public int TotalVersions { get; set; } = 1;
+        public List<MessageVersionDto>? Versions { get; set; }
+    }
+
+    public class MessageVersionDto
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public int VersionNumber { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    public class RegenerateRequestDto
+    {
+        public string UserMessageId { get; set; } = string.Empty;
+        public string ModelId { get; set; } = "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest";
+        public string? SystemInstruction { get; set; }
+    }
+
+    public class SwitchVersionRequestDto
+    {
+        public string MessageId { get; set; } = string.Empty;
     }
 
     public class StreamChunkDto

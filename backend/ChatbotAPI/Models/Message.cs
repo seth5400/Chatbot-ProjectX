@@ -24,5 +24,17 @@ namespace ChatbotAPI.Models
         // Navigation property
         [ForeignKey("ChatId")]
         public Chat? Chat { get; set; }
+
+        // Version tracking fields
+        public string? ParentMessageId { get; set; }  // Links AI response to user message
+
+        [ForeignKey("ParentMessageId")]
+        public Message? ParentMessage { get; set; }
+
+        public int VersionNumber { get; set; } = 1;  // Version number (1, 2, 3...)
+
+        public bool IsActive { get; set; } = true;   // Is this the currently displayed version?
+
+        public int MessageOrder { get; set; } = 0;   // Order in conversation
     }
 }

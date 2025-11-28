@@ -103,11 +103,13 @@ namespace ChatbotAPI.Services
                 });
 
                 // Build request body (OpenAI format)
+                // temperature > 0 ensures varied responses for regeneration
                 var requestBody = new
                 {
                     model = model,
                     messages = messages,
-                    stream = true
+                    stream = true,
+                    temperature = 0.7
                 };
 
                 var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions

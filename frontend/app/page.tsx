@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { API_ENDPOINTS } from "@/lib/config";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message, Chat } from "@/types";
+import type { Message, Chat, MessageVersion } from "@/types";
 
 // Available AI models via LiteLLM (based on your API key access)
 const AI_MODELS = [
@@ -262,23 +262,185 @@ export default function Home() {
     }
   };
 
-  const regenerateResponse = (aiMessageIndex: number) => {
-    if (isLoading) return;
+  const regenerateResponse = async (aiMessageIndex: number) => {
+    if (isLoading || !currentChatId) return;
+
+    // Find the user message that corresponds to this AI message
     let userMessageIndex = aiMessageIndex - 1;
     while (userMessageIndex >= 0 && messages[userMessageIndex].role !== "user") {
       userMessageIndex--;
     }
     if (userMessageIndex < 0) return;
-    const userMessage = messages[userMessageIndex].content;
-    const newMessages = messages.slice(0, aiMessageIndex);
-    setMessages(newMessages);
-    setInput(userMessage);
-    setTimeout(() => {
-      const form = document.querySelector("form");
-      if (form) {
-        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    const userMessage = messages[userMessageIndex];
+    if (!userMessage.id) return;
+
+    setIsLoading(true);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    // Update the current AI message to show loading
+    setMessages((prev) => {
+      const newMessages = [...prev];
+      newMessages[aiMessageIndex] = {
+        ...newMessages[aiMessageIndex],
+        content: "",
+      };
+      return newMessages;
+    });
+
+    try {
+      const systemInstruction = getCurrentSystemInstruction();
+      const response = await fetch(API_ENDPOINTS.REGENERATE(currentChatId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userMessageId: userMessage.id,
+          modelId: selectedModel,
+          systemInstruction: systemInstruction || undefined,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to regenerate");
       }
-    }, 100);
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let newMessageId = "";
+      let newVersionNumber = 1;
+      let totalVersions = 1;
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr) continue;
+
+                const data = JSON.parse(jsonStr);
+
+                if (data.Type === "chunk" && data.Text) {
+                  fullText += data.Text;
+                  setMessages((prev) => {
+                    const newMessages = [...prev];
+                    newMessages[aiMessageIndex] = {
+                      ...newMessages[aiMessageIndex],
+                      content: fullText,
+                    };
+                    return newMessages;
+                  });
+                } else if (data.Type === "version_info") {
+                  newMessageId = data.MessageId;
+                  newVersionNumber = data.VersionNumber;
+                  totalVersions = data.TotalVersions;
+                }
+              } catch (e) {
+                console.error("Parse error:", e);
+              }
+            }
+          }
+        }
+      }
+
+      // Update message with version info
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const oldVersions = newMessages[aiMessageIndex].versions || [];
+
+        // Create the new version
+        const newVersion: MessageVersion = {
+          id: newMessageId,
+          content: fullText,
+          createdAt: new Date().toISOString(),
+          versionNumber: newVersionNumber,
+          isActive: true,
+        };
+
+        // Mark old versions as not active
+        const updatedVersions = oldVersions.map(v => ({ ...v, isActive: false }));
+        updatedVersions.push(newVersion);
+
+        newMessages[aiMessageIndex] = {
+          ...newMessages[aiMessageIndex],
+          id: newMessageId,
+          content: fullText,
+          versionNumber: newVersionNumber,
+          totalVersions: totalVersions,
+          versions: updatedVersions,
+          isActive: true,
+        };
+        return newMessages;
+      });
+
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Regenerate was aborted");
+        return;
+      }
+      console.error("Regenerate Error:", error);
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[aiMessageIndex] = {
+          ...newMessages[aiMessageIndex],
+          content: "ขออภัย ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง",
+        };
+        return newMessages;
+      });
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const switchVersion = async (aiMessageIndex: number, targetVersion: MessageVersion) => {
+    if (!currentChatId || isLoading) return;
+
+    try {
+      const response = await fetch(API_ENDPOINTS.SWITCH_VERSION(currentChatId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageId: targetVersion.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to switch version");
+      }
+
+      // Update local state
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const currentMessage = newMessages[aiMessageIndex];
+
+        const updatedVersions = currentMessage.versions?.map(v => ({
+          ...v,
+          isActive: v.id === targetVersion.id,
+        }));
+
+        newMessages[aiMessageIndex] = {
+          ...currentMessage,
+          id: targetVersion.id,
+          content: targetVersion.content,
+          versionNumber: targetVersion.versionNumber,
+          isActive: true,
+          versions: updatedVersions,
+        };
+        return newMessages;
+      });
+    } catch (error) {
+      console.error("Switch version error:", error);
+    }
   };
 
   const sendMessage = async (e?: React.FormEvent) => {
@@ -350,6 +512,37 @@ export default function Home() {
                       role: "model",
                       content: fullText,
                     };
+                    return newMessages;
+                  });
+                } else if (data.Type === "message_ids") {
+                  // Update messages with their IDs for regenerate functionality
+                  setMessages((prev) => {
+                    const newMessages = [...prev];
+                    // Update user message ID
+                    if (data.UserMessageId && newMessages[botMessageIndex - 1]) {
+                      newMessages[botMessageIndex - 1] = {
+                        ...newMessages[botMessageIndex - 1],
+                        id: data.UserMessageId,
+                      };
+                    }
+                    // Update bot message ID and set up initial version
+                    if (data.BotMessageId && newMessages[botMessageIndex]) {
+                      newMessages[botMessageIndex] = {
+                        ...newMessages[botMessageIndex],
+                        id: data.BotMessageId,
+                        parentMessageId: data.UserMessageId,
+                        versionNumber: 1,
+                        totalVersions: 1,
+                        isActive: true,
+                        versions: [{
+                          id: data.BotMessageId,
+                          content: newMessages[botMessageIndex].content,
+                          createdAt: new Date().toISOString(),
+                          versionNumber: 1,
+                          isActive: true,
+                        }],
+                      };
+                    }
                     return newMessages;
                   });
                 } else if (data.Type === "done") {
@@ -725,15 +918,55 @@ export default function Home() {
                         )}
 
                         {msg.role === "model" && (
-                          <button
-                            onClick={() => regenerateResponse(index)}
-                            className="p-1.5 hover:bg-[#1a1a1a] rounded-lg transition-colors"
-                            title="ตอบใหม่"
-                          >
-                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
+                          <>
+                            {/* Version Switcher */}
+                            {msg.versions && msg.versions.length > 1 && (
+                              <div className="flex items-center gap-1 px-1">
+                                <button
+                                  onClick={() => {
+                                    const currentIdx = msg.versions!.findIndex(v => v.isActive);
+                                    if (currentIdx > 0) {
+                                      switchVersion(index, msg.versions![currentIdx - 1]);
+                                    }
+                                  }}
+                                  disabled={(msg.versions.findIndex(v => v.isActive) || 0) === 0}
+                                  className="p-1 hover:bg-[#1a1a1a] rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                  title="คำตอบก่อนหน้า"
+                                >
+                                  <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                  </svg>
+                                </button>
+                                <span className="text-xs text-gray-500 min-w-[40px] text-center">
+                                  {(msg.versions.findIndex(v => v.isActive) || 0) + 1}/{msg.versions.length}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const currentIdx = msg.versions!.findIndex(v => v.isActive);
+                                    if (currentIdx < msg.versions!.length - 1) {
+                                      switchVersion(index, msg.versions![currentIdx + 1]);
+                                    }
+                                  }}
+                                  disabled={(msg.versions.findIndex(v => v.isActive) || 0) === msg.versions.length - 1}
+                                  className="p-1 hover:bg-[#1a1a1a] rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                  title="คำตอบถัดไป"
+                                >
+                                  <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => regenerateResponse(index)}
+                              className="p-1.5 hover:bg-[#1a1a1a] rounded-lg transition-colors"
+                              title="ตอบใหม่"
+                            >
+                              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>

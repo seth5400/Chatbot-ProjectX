@@ -88,22 +88,64 @@ namespace ChatbotAPI.Controllers
                     return NotFound(new { message = "Chat not found" });
                 }
 
+                // Get all messages ordered by MessageOrder, then CreatedAt
+                var allMessages = chat.Messages
+                    .OrderBy(m => m.MessageOrder)
+                    .ThenBy(m => m.CreatedAt)
+                    .ToList();
+
+                // Group AI responses by ParentMessageId
+                var aiResponseGroups = allMessages
+                    .Where(m => m.Role == "model" && m.ParentMessageId != null)
+                    .GroupBy(m => m.ParentMessageId)
+                    .ToDictionary(g => g.Key!, g => g.OrderBy(m => m.VersionNumber).ToList());
+
+                var messageList = new List<MessageDto>();
+
+                foreach (var message in allMessages)
+                {
+                    // Skip non-active AI versions (we'll include them as Versions array)
+                    if (message.Role == "model" && message.ParentMessageId != null && !message.IsActive)
+                    {
+                        continue;
+                    }
+
+                    var dto = new MessageDto
+                    {
+                        Id = message.Id,
+                        Role = message.Role,
+                        Content = message.Content,
+                        CreatedAt = message.CreatedAt,
+                        ParentMessageId = message.ParentMessageId,
+                        VersionNumber = message.VersionNumber,
+                        IsActive = message.IsActive
+                    };
+
+                    // For AI responses, include all versions
+                    if (message.Role == "model" && message.ParentMessageId != null
+                        && aiResponseGroups.TryGetValue(message.ParentMessageId, out var versions))
+                    {
+                        dto.TotalVersions = versions.Count;
+                        dto.Versions = versions.Select(v => new MessageVersionDto
+                        {
+                            Id = v.Id,
+                            Content = v.Content,
+                            CreatedAt = v.CreatedAt,
+                            VersionNumber = v.VersionNumber,
+                            IsActive = v.IsActive
+                        }).ToList();
+                    }
+
+                    messageList.Add(dto);
+                }
+
                 var chatDetail = new ChatDetailDto
                 {
                     Id = chat.Id,
                     Title = chat.Title,
                     CreatedAt = chat.CreatedAt,
                     UpdatedAt = chat.UpdatedAt,
-                    Messages = chat.Messages
-                        .OrderBy(m => m.CreatedAt)
-                        .Select(m => new MessageDto
-                        {
-                            Id = m.Id,
-                            Role = m.Role,
-                            Content = m.Content,
-                            CreatedAt = m.CreatedAt
-                        })
-                        .ToList()
+                    Messages = messageList
                 };
 
                 return Ok(chatDetail);
@@ -124,6 +166,7 @@ namespace ChatbotAPI.Controllers
             Response.Headers.Append("Connection", "keep-alive");
 
             string? chatId = null;
+            string? userMessageId = null;
             List<MessageHistoryDto>? history = request.History;
 
             try
@@ -179,6 +222,11 @@ namespace ChatbotAPI.Controllers
                         chatId = newChat.Id;
                     }
 
+                    // Get the next message order
+                    var maxOrder = await context.Messages
+                        .Where(m => m.ChatId == chatId)
+                        .MaxAsync(m => (int?)m.MessageOrder) ?? 0;
+
                     // Save user message
                     var userMessage = new Message
                     {
@@ -186,11 +234,13 @@ namespace ChatbotAPI.Controllers
                         Role = "user",
                         Content = request.Message,
                         ChatId = chatId,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        MessageOrder = maxOrder + 1
                     };
 
                     context.Messages.Add(userMessage);
                     await context.SaveChangesAsync();
+                    userMessageId = userMessage.Id;
 
                     // Add user message to history
                     history ??= new List<MessageHistoryDto>();
@@ -226,13 +276,23 @@ namespace ChatbotAPI.Controllers
                 {
                     await using var saveContext = await _contextFactory.CreateDbContextAsync();
 
+                    // Find the user message we just saved to link the AI response
+                    var lastUserMessage = await saveContext.Messages
+                        .Where(m => m.ChatId == chatId && m.Role == "user")
+                        .OrderByDescending(m => m.MessageOrder)
+                        .FirstOrDefaultAsync();
+
                     var botMessage = new Message
                     {
                         Id = Guid.NewGuid().ToString(),
                         Role = "model",
                         Content = fullText.ToString(),
                         ChatId = chatId,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        ParentMessageId = lastUserMessage?.Id,
+                        VersionNumber = 1,
+                        IsActive = true,
+                        MessageOrder = (lastUserMessage?.MessageOrder ?? 0) + 1
                     };
 
                     saveContext.Messages.Add(botMessage);
@@ -244,6 +304,17 @@ namespace ChatbotAPI.Controllers
                     }
 
                     await saveContext.SaveChangesAsync();
+
+                    // Send message IDs back to frontend for regenerate functionality
+                    var messageIds = new
+                    {
+                        Type = "message_ids",
+                        UserMessageId = userMessageId ?? lastUserMessage?.Id,
+                        BotMessageId = botMessage.Id
+                    };
+                    var idsJson = JsonSerializer.Serialize(messageIds);
+                    await Response.WriteAsync($"data: {idsJson}\n\n");
+                    await Response.Body.FlushAsync();
                 }
             }
             catch (Exception ex)
@@ -330,6 +401,169 @@ namespace ChatbotAPI.Controllers
             {
                 _logger.LogError(ex, "Error deleting chat {ChatId}", id);
                 return StatusCode(500, new { message = "Error deleting chat", error = ex.Message });
+            }
+        }
+
+        // POST: api/chat/{chatId}/regenerate
+        [HttpPost("{chatId}/regenerate")]
+        public async Task RegenerateResponse(string chatId, [FromBody] RegenerateRequestDto request)
+        {
+            Response.Headers.Append("Content-Type", "text/event-stream");
+            Response.Headers.Append("Cache-Control", "no-cache");
+            Response.Headers.Append("Connection", "keep-alive");
+
+            try
+            {
+                await using var context = await _contextFactory.CreateDbContextAsync();
+
+                // Find the user message
+                var userMessage = await context.Messages
+                    .FirstOrDefaultAsync(m => m.Id == request.UserMessageId && m.Role == "user");
+
+                if (userMessage == null)
+                {
+                    await WriteStreamError("User message not found");
+                    return;
+                }
+
+                // Find existing AI responses for this user message
+                var existingResponses = await context.Messages
+                    .Where(m => m.ParentMessageId == request.UserMessageId && m.Role == "model")
+                    .ToListAsync();
+
+                // Mark all existing versions as not active
+                foreach (var response in existingResponses)
+                {
+                    response.IsActive = false;
+                }
+
+                var nextVersionNumber = existingResponses.Count > 0
+                    ? existingResponses.Max(r => r.VersionNumber) + 1
+                    : 1;
+
+                await context.SaveChangesAsync();
+
+                // Build history up to (but NOT including) the current user message
+                // LiteLLMService will add the current user message automatically
+                var history = await context.Messages
+                    .Where(m => m.ChatId == chatId && m.MessageOrder < userMessage.MessageOrder)
+                    .Where(m => m.Role == "user" || (m.Role == "model" && m.IsActive))
+                    .OrderBy(m => m.MessageOrder)
+                    .Select(m => new MessageHistoryDto
+                    {
+                        Role = m.Role,
+                        Content = m.Content
+                    })
+                    .ToListAsync();
+
+                // Stream response from LiteLLM
+                var fullText = new StringBuilder();
+
+                await foreach (var chunk in _liteLLMService.SendMessageStreamAsync(
+                    userMessage.Content,
+                    history,
+                    chatId,
+                    request.ModelId,
+                    request.SystemInstruction))
+                {
+                    var json = JsonSerializer.Serialize(chunk);
+                    await Response.WriteAsync($"data: {json}\n\n");
+                    await Response.Body.FlushAsync();
+
+                    if (chunk.Type == "chunk" && !string.IsNullOrEmpty(chunk.Text))
+                    {
+                        fullText.Append(chunk.Text);
+                    }
+                }
+
+                // Save new AI response version
+                await using var saveContext = await _contextFactory.CreateDbContextAsync();
+
+                var newResponse = new Message
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Role = "model",
+                    Content = fullText.ToString(),
+                    ChatId = chatId,
+                    CreatedAt = DateTime.UtcNow,
+                    ParentMessageId = request.UserMessageId,
+                    VersionNumber = nextVersionNumber,
+                    IsActive = true,
+                    MessageOrder = userMessage.MessageOrder + 1
+                };
+
+                saveContext.Messages.Add(newResponse);
+
+                var chatToUpdate = await saveContext.Chats.FindAsync(chatId);
+                if (chatToUpdate != null)
+                {
+                    chatToUpdate.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await saveContext.SaveChangesAsync();
+
+                // Send final metadata with version info
+                var versionInfo = new
+                {
+                    Type = "version_info",
+                    MessageId = newResponse.Id,
+                    VersionNumber = nextVersionNumber,
+                    TotalVersions = nextVersionNumber
+                };
+                var versionJson = JsonSerializer.Serialize(versionInfo);
+                await Response.WriteAsync($"data: {versionJson}\n\n");
+                await Response.Body.FlushAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error regenerating response");
+                await WriteStreamError(ex.Message);
+            }
+        }
+
+        // POST: api/chat/{chatId}/switch-version
+        [HttpPost("{chatId}/switch-version")]
+        public async Task<ActionResult> SwitchVersion(string chatId, [FromBody] SwitchVersionRequestDto request)
+        {
+            try
+            {
+                var targetMessage = await _context.Messages
+                    .FirstOrDefaultAsync(m => m.Id == request.MessageId && m.ChatId == chatId);
+
+                if (targetMessage == null)
+                {
+                    return NotFound(new { message = "Message not found" });
+                }
+
+                if (targetMessage.Role != "model" || targetMessage.ParentMessageId == null)
+                {
+                    return BadRequest(new { message = "Can only switch versions for AI responses" });
+                }
+
+                // Get all versions for this user message
+                var allVersions = await _context.Messages
+                    .Where(m => m.ParentMessageId == targetMessage.ParentMessageId && m.Role == "model")
+                    .ToListAsync();
+
+                // Mark all as not active, then set the target as active
+                foreach (var version in allVersions)
+                {
+                    version.IsActive = version.Id == request.MessageId;
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "Version switched successfully",
+                    activeMessageId = request.MessageId,
+                    versionNumber = targetMessage.VersionNumber
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error switching version");
+                return StatusCode(500, new { message = "Error switching version", error = ex.Message });
             }
         }
 

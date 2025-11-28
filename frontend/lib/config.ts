@@ -6,4 +6,6 @@ export const API_ENDPOINTS = {
   CHAT_SEARCH: (query: string) => `${API_BASE_URL}/api/chat?search=${encodeURIComponent(query)}`,
   CHAT_BY_ID: (id: string) => `${API_BASE_URL}/api/chat/${id}`,
   CHAT_NEW: `${API_BASE_URL}/api/chat/new`,
+  REGENERATE: (chatId: string) => `${API_BASE_URL}/api/chat/${chatId}/regenerate`,
+  SWITCH_VERSION: (chatId: string) => `${API_BASE_URL}/api/chat/${chatId}/switch-version`,
 };

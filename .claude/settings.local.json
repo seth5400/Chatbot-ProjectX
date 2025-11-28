@@ -27,7 +27,8 @@
       "Bash(rm:*)",
       "Bash(dir /b \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\Services\")",
       "Bash(dir /b \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\DTOs\")",
-      "Bash(dir /b \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\")"
+      "Bash(dir /b \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\")",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []
