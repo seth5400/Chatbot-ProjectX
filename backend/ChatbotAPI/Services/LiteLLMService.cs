@@ -104,12 +104,14 @@ namespace ChatbotAPI.Services
 
                 // Build request body (OpenAI format)
                 // temperature > 0 ensures varied responses for regeneration
+                // random seed prevents caching and ensures different responses each time
                 var requestBody = new
                 {
                     model = model,
                     messages = messages,
                     stream = true,
-                    temperature = 0.7
+                    temperature = 0.8,
+                    seed = Random.Shared.Next()
                 };
 
                 var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
