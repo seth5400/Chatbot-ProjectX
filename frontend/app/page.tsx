@@ -70,6 +70,7 @@ export default function Home() {
   const [renameValue, setRenameValue] = useState("");
   const [selectedModel, setSelectedModel] = useState("ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [isPersonaDropdownOpen, setIsPersonaDropdownOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -79,11 +80,13 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
   const [customInstruction, setCustomInstruction] = useState("");
-  const [settingsTab, setSettingsTab] = useState("personas");
+  const [isCustomInstructionModalOpen, setIsCustomInstructionModalOpen] = useState(false);
+  const [tempCustomInstruction, setTempCustomInstruction] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const personaDropdownRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
@@ -119,6 +122,9 @@ export default function Home() {
       }
       if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
         setIsModelDropdownOpen(false);
+      }
+      if (personaDropdownRef.current && !personaDropdownRef.current.contains(event.target as Node)) {
+        setIsPersonaDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -560,20 +566,20 @@ export default function Home() {
 
       {/* Main Chat Area */}
       <main className="flex-1 flex flex-col bg-[#0f0f0f]">
-        {/* Header - Minimal */}
-        <header className="h-12 border-b border-[#1a1a1a] flex items-center justify-between px-3">
-          <div className="flex items-center gap-2">
+        {/* Header - Minimal & Friendly */}
+        <header className="h-14 border-b border-[#1a1a1a] flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-1.5 hover:bg-[#1a1a1a] rounded-lg transition-colors"
+              className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors"
             >
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <span className="text-sm font-medium text-white">Chatbot AI</span>
+            <span className="text-base font-medium text-white">Chatbot AI</span>
             {isTemporary && (
-              <span className="px-1.5 py-0.5 text-[10px] bg-orange-500/15 text-orange-400 rounded font-medium">
+              <span className="px-2 py-1 text-xs bg-orange-500/15 text-orange-400 rounded-md font-medium">
                 ชั่วคราว
               </span>
             )}
@@ -581,33 +587,25 @@ export default function Home() {
 
           <button
             onClick={toggleTemporaryChat}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
               isTemporary
                 ? "bg-orange-500/15 text-orange-400"
                 : "hover:bg-[#1a1a1a] text-gray-400 hover:text-white"
             }`}
-            title="แชทชั่วคราว (ไม่บันทึก)"
+            title="แชทชั่วคราว"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="hidden sm:inline">ชั่วคราว</span>
+            <span className="hidden sm:inline">แชทชั่วคราว</span>
           </button>
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto scrollbar-custom">
+        <div className={`${messages.length === 0 ? 'hidden' : 'flex-1 overflow-y-auto scrollbar-custom'}`}>
           <div className="max-w-3xl mx-auto px-4 py-6">
             {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500 py-20">
-                <div className="w-16 h-16 mb-5 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
-                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-semibold text-white mb-2">สวัสดี! มีอะไรให้ช่วยไหม?</h2>
-                <p className="text-gray-500 text-sm text-center">ถามคำถาม ให้ช่วยเขียนโค้ด หรือแค่อยากคุย</p>
-              </div>
+              null
             ) : (
               messages.map((msg, index) => (
                 <div
@@ -762,18 +760,120 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Input Area - Simple */}
-        <div className="border-t border-[#1a1a1a] p-4">
-          <form onSubmit={sendMessage} className="max-w-3xl mx-auto">
-            <div className={`bg-[#1a1a1a] rounded-2xl border-2 ${input.trim() ? 'border-orange-500/50' : 'border-[#252525]'} transition-all shadow-lg`}>
-              {/* Textarea */}
-              <div className="p-4">
+        {/* Input Area - Center when empty, bottom when chatting */}
+        <div className={`transition-all duration-300 ${messages.length === 0 ? 'flex-1 flex flex-col items-center justify-center px-4' : 'p-4 pb-6'}`}>
+          {/* Welcome message - only show when no messages */}
+          {messages.length === 0 && (
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mb-5 mx-auto rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+              </div>
+              {isTemporary ? (
+                <>
+                  <h1 className="text-2xl font-semibold text-white mb-2">แชทชั่วคราว</h1>
+                  <p className="text-gray-400 text-sm">คุยได้เลย แชทนี้จะหายไปเมื่อปิดหน้านี้หรือเริ่มแชทใหม่</p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-2xl font-semibold text-white mb-2">มีอะไรให้ช่วยไหม?</h1>
+                  <p className="text-gray-400 text-sm">ถามอะไรก็ได้ ช่วยเขียนโค้ด หรือแค่อยากคุยเล่น</p>
+                </>
+              )}
+            </div>
+          )}
+
+          <form onSubmit={sendMessage} className={`w-full ${messages.length === 0 ? 'max-w-2xl' : 'max-w-3xl mx-auto'}`}>
+            <div className={`bg-[#1a1a1a] rounded-xl border ${input.trim() ? 'border-orange-500/40' : 'border-[#2a2a2a]'} transition-all`}>
+              <div className="flex items-end gap-2 p-3">
+                {/* Persona selector - at the front */}
+                <div className="relative flex-shrink-0" ref={personaDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsPersonaDropdownOpen(!isPersonaDropdownOpen)}
+                    className={`p-1.5 rounded-lg text-base transition-colors ${
+                      selectedPersona || customInstruction
+                        ? "bg-orange-500/15 hover:bg-orange-500/25"
+                        : "hover:bg-[#252525]"
+                    }`}
+                    title={customInstruction ? "กำหนดเอง" : (selectedPersona ? PERSONAS.find(p => p.id === selectedPersona)?.name : "เลือกบุคลิก AI")}
+                  >
+                    {customInstruction ? "✏️" : (PERSONAS.find(p => p.id === selectedPersona)?.icon || "🤖")}
+                  </button>
+
+                  {isPersonaDropdownOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg shadow-xl z-50 w-48 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-[#2a2a2a]">
+                        <span className="text-xs text-gray-500">เลือกบุคลิก AI</span>
+                      </div>
+                      {PERSONAS.map((persona) => (
+                        <button
+                          key={persona.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPersona(persona.id === "default" ? null : persona.id);
+                            setCustomInstruction("");
+                            setIsPersonaDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                            (selectedPersona === persona.id || (!selectedPersona && !customInstruction && persona.id === "default"))
+                              ? "bg-orange-500/15 text-orange-100"
+                              : "hover:bg-[#252525] text-gray-300"
+                          }`}
+                        >
+                          <span className="text-base">{persona.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium">{persona.name}</div>
+                            <div className="text-[10px] text-gray-500 truncate">{persona.description}</div>
+                          </div>
+                          {(selectedPersona === persona.id || (!selectedPersona && !customInstruction && persona.id === "default")) && (
+                            <svg className="w-3 h-3 text-orange-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                      {/* Custom instruction option */}
+                      <div className="border-t border-[#2a2a2a]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempCustomInstruction(customInstruction);
+                            setIsCustomInstructionModalOpen(true);
+                            setIsPersonaDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                            customInstruction
+                              ? "bg-orange-500/15 text-orange-100"
+                              : "hover:bg-[#252525] text-gray-300"
+                          }`}
+                        >
+                          <span className="text-base">✏️</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium">กำหนดเอง</div>
+                            <div className="text-[10px] text-gray-500 truncate">
+                              {customInstruction ? "มีคำสั่งที่ตั้งไว้" : "เขียนคำสั่งของคุณเอง"}
+                            </div>
+                          </div>
+                          {customInstruction && (
+                            <svg className="w-3 h-3 text-orange-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Textarea */}
                 <textarea
                   value={input}
                   onChange={(e) => {
                     setInput(e.target.value);
                     e.target.style.height = 'auto';
-                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -781,224 +881,211 @@ export default function Home() {
                       sendMessage();
                     }
                   }}
-                  placeholder="พิมพ์ข้อความ..."
+                  placeholder="พิมพ์อะไรก็ได้..."
                   disabled={isLoading}
                   rows={1}
-                  className="w-full bg-transparent text-white text-base placeholder-gray-500 focus:outline-none resize-none"
-                  style={{ minHeight: '28px', maxHeight: '200px' }}
+                  className="flex-1 bg-transparent text-white text-sm placeholder-gray-500 focus:outline-none resize-none py-1.5"
+                  style={{ minHeight: '24px', maxHeight: '120px' }}
                 />
-              </div>
 
-              {/* Bottom toolbar */}
-              <div className="flex items-center justify-between px-4 py-3 border-t border-[#252525]">
-                {/* Left - Empty for now */}
-                <div></div>
+                {/* Model selector */}
+                <div className="relative flex-shrink-0" ref={modelDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                    className="p-1.5 hover:bg-[#252525] rounded-lg transition-colors"
+                    title={AI_MODELS.find(m => m.id === selectedModel)?.name || "Model"}
+                  >
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </button>
 
-                {/* Right buttons */}
-                <div className="flex items-center gap-2">
-                  <div className="relative" ref={modelDropdownRef}>
-                    <button
-                      type="button"
-                      onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                      className="flex items-center gap-2 px-3 py-2 hover:bg-[#252525] rounded-xl text-sm text-gray-400 hover:text-gray-200 transition-colors"
-                    >
-                      <span>{AI_MODELS.find(m => m.id === selectedModel)?.name || "Model"}</span>
-                      <svg className={`w-4 h-4 transition-transform ${isModelDropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-
-                    {isModelDropdownOpen && (
-                      <div className="absolute bottom-full right-0 mb-2 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl shadow-xl z-50 w-56 overflow-hidden">
-                        {AI_MODELS.map((model) => (
-                          <button
-                            key={model.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedModel(model.id);
-                              setIsModelDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-3 text-sm transition-colors ${
-                              selectedModel === model.id
-                                ? "bg-orange-500/15 text-orange-100"
-                                : "hover:bg-[#252525] text-gray-300"
-                            }`}
-                          >
-                            <div className="font-medium">{model.name}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">{model.description}</div>
-                          </button>
-                        ))}
+                  {isModelDropdownOpen && (
+                    <div className="absolute bottom-full right-0 mb-2 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg shadow-xl z-50 w-52 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-[#2a2a2a]">
+                        <span className="text-xs text-gray-500">เลือกโมเดล AI</span>
                       </div>
-                    )}
-                  </div>
-
-                  {isLoading ? (
-                    <button
-                      type="button"
-                      onClick={stopGenerating}
-                      className="p-2.5 bg-[#252525] hover:bg-[#303030] text-white rounded-xl transition-colors"
-                      title="หยุด"
-                    >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <rect x="6" y="6" width="8" height="8" rx="1" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={!input.trim()}
-                      className={`p-2.5 rounded-xl transition-all ${
-                        input.trim()
-                          ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/25'
-                          : 'bg-[#252525] text-gray-600 cursor-not-allowed'
-                      }`}
-                      title="ส่ง"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                    </button>
+                      {AI_MODELS.map((model) => (
+                        <button
+                          key={model.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedModel(model.id);
+                            setIsModelDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                            selectedModel === model.id
+                              ? "bg-orange-500/15 text-orange-100"
+                              : "hover:bg-[#252525] text-gray-300"
+                          }`}
+                        >
+                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium">{model.name}</div>
+                            <div className="text-[10px] text-gray-500 truncate">{model.description}</div>
+                          </div>
+                          {selectedModel === model.id && (
+                            <svg className="w-3 h-3 text-orange-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
+
+                {/* Send/Stop button */}
+                {isLoading ? (
+                  <button
+                    type="button"
+                    onClick={stopGenerating}
+                    className="flex-shrink-0 p-2 bg-[#252525] hover:bg-[#303030] text-white rounded-lg transition-colors"
+                    title="หยุด"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <rect x="6" y="6" width="8" height="8" rx="1" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!input.trim()}
+                    className={`flex-shrink-0 p-2 rounded-lg transition-all ${
+                      input.trim()
+                        ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                        : 'bg-[#252525] text-gray-600 cursor-not-allowed'
+                    }`}
+                    title="ส่ง"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
           </form>
         </div>
       </main>
 
-      {/* Settings Modal - Compact */}
+      {/* Settings Modal - Simplified */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#1a1a1a] border border-[#252525] rounded-xl w-full max-w-2xl h-[500px] flex overflow-hidden">
-            {/* Left Panel */}
-            <div className="w-[200px] bg-[#151515] border-r border-[#252525] flex flex-col">
-              <div className="p-3 border-b border-[#252525]">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <span className="text-sm font-medium text-white">ตั้งค่า</span>
+          <div className="bg-[#1a1a1a] border border-[#252525] rounded-xl w-full max-w-sm overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-[#252525] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </div>
+                <span className="text-base font-medium text-white">ตั้งค่า</span>
               </div>
-              <nav className="flex-1 p-2">
-                <button
-                  onClick={() => setSettingsTab("personas")}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2 mb-1 ${
-                    settingsTab === "personas"
-                      ? "bg-orange-500/15 text-orange-100"
-                      : "text-gray-400 hover:bg-[#1e1e1e] hover:text-white"
-                  }`}
-                >
-                  <span>🎭</span>
-                  บุคลิก AI
-                </button>
-                <button
-                  onClick={() => setSettingsTab("custom")}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2 ${
-                    settingsTab === "custom"
-                      ? "bg-orange-500/15 text-orange-100"
-                      : "text-gray-400 hover:bg-[#1e1e1e] hover:text-white"
-                  }`}
-                >
-                  <span>✏️</span>
-                  คำสั่งกำหนดเอง
-                </button>
-              </nav>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="p-1.5 hover:bg-[#252525] rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
-            {/* Right Panel */}
-            <div className="flex-1 flex flex-col">
-              <div className="p-3 border-b border-[#252525] flex items-center justify-between">
-                <h3 className="text-sm font-medium text-white">
-                  {settingsTab === "personas" ? "เลือกบุคลิก AI" : "คำสั่งกำหนดเอง"}
-                </h3>
-                <button
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="p-1.5 hover:bg-[#252525] rounded-lg transition-colors"
-                >
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+            {/* Content */}
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#252525] flex items-center justify-center">
+                <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
               </div>
+              <h3 className="text-sm font-medium text-white mb-2">Coming Soon</h3>
+              <p className="text-xs text-gray-500">ฟีเจอร์การตั้งค่าเพิ่มเติมกำลังพัฒนา</p>
+            </div>
 
-              <div className="flex-1 overflow-y-auto scrollbar-custom p-3">
-                {settingsTab === "personas" ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {PERSONAS.map((persona) => (
-                      <button
-                        key={persona.id}
-                        onClick={() => {
-                          setSelectedPersona(persona.id === "default" ? null : persona.id);
-                          setCustomInstruction("");
-                        }}
-                        className={`p-3 rounded-lg border text-left transition-colors ${
-                          (selectedPersona === persona.id) || (persona.id === "default" && !selectedPersona && !customInstruction)
-                            ? "border-orange-500 bg-orange-500/10"
-                            : "border-[#252525] hover:border-[#353535] hover:bg-[#1e1e1e]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">{persona.icon}</span>
-                          <span className="text-xs font-medium text-white">{persona.name}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-500">{persona.description}</p>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-xs text-gray-400">
-                      เขียนคำสั่งเพื่อกำหนดพฤติกรรมของ AI ตามที่คุณต้องการ
-                    </p>
-                    <textarea
-                      value={customInstruction}
-                      onChange={(e) => {
-                        setCustomInstruction(e.target.value);
-                        if (e.target.value.trim()) {
-                          setSelectedPersona(null);
-                        }
-                      }}
-                      placeholder="เช่น: คุณคือผู้เชี่ยวชาญด้านการเงิน..."
-                      className="w-full h-40 p-3 bg-[#0f0f0f] border border-[#252525] rounded-lg text-white text-xs placeholder-gray-600 focus:outline-none focus:border-orange-500 resize-none"
-                    />
-                    <div className="flex justify-between items-center text-[10px] text-gray-500">
-                      <span>{customInstruction.length} ตัวอักษร</span>
-                      {customInstruction && (
-                        <button onClick={() => setCustomInstruction("")} className="text-red-400 hover:text-red-300">
-                          ล้าง
-                        </button>
-                      )}
-                    </div>
-                  </div>
+            {/* Footer */}
+            <div className="p-4 border-t border-[#252525]">
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                ปิด
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Instruction Modal */}
+      {isCustomInstructionModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] border border-[#252525] rounded-xl w-full max-w-md overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-[#252525] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✏️</span>
+                <span className="text-base font-medium text-white">คำสั่งกำหนดเอง</span>
+              </div>
+              <button
+                onClick={() => setIsCustomInstructionModalOpen(false)}
+                className="p-1.5 hover:bg-[#252525] rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4">
+              <p className="text-xs text-gray-400 mb-3">
+                เขียนคำสั่งเพื่อกำหนดพฤติกรรมของ AI ตามที่คุณต้องการ
+              </p>
+              <textarea
+                value={tempCustomInstruction}
+                onChange={(e) => setTempCustomInstruction(e.target.value)}
+                placeholder="เช่น: คุณคือผู้เชี่ยวชาญด้านการเงิน ตอบคำถามเกี่ยวกับการลงทุนอย่างละเอียด..."
+                className="w-full h-32 p-3 bg-[#0f0f0f] border border-[#252525] rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-orange-500 resize-none"
+                autoFocus
+              />
+              <div className="flex justify-between items-center mt-2 text-[10px] text-gray-500">
+                <span>{tempCustomInstruction.length} ตัวอักษร</span>
+                {tempCustomInstruction && (
+                  <button
+                    onClick={() => setTempCustomInstruction("")}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    ล้าง
+                  </button>
                 )}
               </div>
+            </div>
 
-              <div className="p-3 border-t border-[#252525] flex justify-between items-center">
-                <div className="text-xs text-gray-500">
-                  {selectedPersona && !customInstruction && (
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
-                      กำลังใช้: {PERSONAS.find(p => p.id === selectedPersona)?.name}
-                    </span>
-                  )}
-                  {customInstruction && (
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
-                      กำลังใช้: คำสั่งกำหนดเอง
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-medium transition-colors"
-                >
-                  บันทึก
-                </button>
-              </div>
+            {/* Footer */}
+            <div className="p-4 border-t border-[#252525] flex gap-2">
+              <button
+                onClick={() => setIsCustomInstructionModalOpen(false)}
+                className="flex-1 py-2 bg-[#252525] hover:bg-[#303030] text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  setCustomInstruction(tempCustomInstruction);
+                  if (tempCustomInstruction.trim()) {
+                    setSelectedPersona(null);
+                  }
+                  setIsCustomInstructionModalOpen(false);
+                }}
+                className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                ตกลง
+              </button>
             </div>
           </div>
         </div>

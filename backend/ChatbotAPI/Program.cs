@@ -17,9 +17,14 @@ builder.Services.AddHttpClient();
 // Register Services with Interfaces
 builder.Services.AddScoped<ILiteLLMService, LiteLLMService>();
 
-// Configure Entity Framework Core with SQL Server
-builder.Services.AddDbContext<AppDbContext>(options =>
+// Configure Entity Framework Core with SQL Server using Pooled DbContextFactory
+// This supports both regular DbContext injection and IDbContextFactory for long-running operations
+builder.Services.AddPooledDbContextFactory<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Also register AppDbContext for regular scoped usage
+builder.Services.AddScoped<AppDbContext>(sp =>
+    sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
 // Configure CORS
 builder.Services.AddCors(options =>

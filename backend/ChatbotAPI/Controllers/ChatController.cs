@@ -14,15 +14,18 @@ namespace ChatbotAPI.Controllers
     public class ChatController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IDbContextFactory<AppDbContext> _contextFactory;
         private readonly ILiteLLMService _liteLLMService;
         private readonly ILogger<ChatController> _logger;
 
         public ChatController(
             AppDbContext context,
+            IDbContextFactory<AppDbContext> contextFactory,
             ILiteLLMService liteLLMService,
             ILogger<ChatController> logger)
         {
             _context = context;
+            _contextFactory = contextFactory;
             _liteLLMService = liteLLMService;
             _logger = logger;
         }
@@ -116,22 +119,24 @@ namespace ChatbotAPI.Controllers
         [HttpPost]
         public async Task SendMessage([FromBody] ChatRequestDto request)
         {
+            Response.Headers.Append("Content-Type", "text/event-stream");
+            Response.Headers.Append("Cache-Control", "no-cache");
+            Response.Headers.Append("Connection", "keep-alive");
+
+            string? chatId = null;
+            List<MessageHistoryDto>? history = request.History;
+
             try
             {
-                Response.Headers.Append("Content-Type", "text/event-stream");
-                Response.Headers.Append("Cache-Control", "no-cache");
-                Response.Headers.Append("Connection", "keep-alive");
-
-                Chat? chat = null;
-                List<MessageHistoryDto>? history = request.History;
-
-                // Handle non-temporary chat
+                // Handle non-temporary chat - use factory for short-lived context
                 if (!request.Temporary)
                 {
+                    await using var context = await _contextFactory.CreateDbContextAsync();
+
                     // Get or create chat
                     if (!string.IsNullOrEmpty(request.ChatId))
                     {
-                        chat = await _context.Chats
+                        var chat = await context.Chats
                             .Include(c => c.Messages)
                             .FirstOrDefaultAsync(c => c.Id == request.ChatId);
 
@@ -140,6 +145,8 @@ namespace ChatbotAPI.Controllers
                             await WriteStreamError("Chat not found");
                             return;
                         }
+
+                        chatId = chat.Id;
 
                         // Load history from database if not provided
                         if (history == null || history.Count == 0)
@@ -156,11 +163,10 @@ namespace ChatbotAPI.Controllers
                     }
                     else
                     {
-                        // Create new chat
-                        // Generate AI-powered title (like ChatGPT)
+                        // Create new chat with AI-powered title
                         var chatTitle = await _liteLLMService.GenerateChatTitleAsync(request.Message);
 
-                        chat = new Chat
+                        var newChat = new Chat
                         {
                             Id = Guid.NewGuid().ToString(),
                             Title = chatTitle,
@@ -168,8 +174,9 @@ namespace ChatbotAPI.Controllers
                             UpdatedAt = DateTime.UtcNow
                         };
 
-                        _context.Chats.Add(chat);
-                        await _context.SaveChangesAsync();
+                        context.Chats.Add(newChat);
+                        await context.SaveChangesAsync();
+                        chatId = newChat.Id;
                     }
 
                     // Save user message
@@ -178,18 +185,15 @@ namespace ChatbotAPI.Controllers
                         Id = Guid.NewGuid().ToString(),
                         Role = "user",
                         Content = request.Message,
-                        ChatId = chat.Id,
+                        ChatId = chatId,
                         CreatedAt = DateTime.UtcNow
                     };
 
-                    _context.Messages.Add(userMessage);
-                    await _context.SaveChangesAsync();
+                    context.Messages.Add(userMessage);
+                    await context.SaveChangesAsync();
 
-                    // เพิ่ม user message ล่าสุดเข้าไปใน history ก่อนส่งไป LiteLLM
-                    if (history == null)
-                    {
-                        history = new List<MessageHistoryDto>();
-                    }
+                    // Add user message to history
+                    history ??= new List<MessageHistoryDto>();
                     history.Add(new MessageHistoryDto
                     {
                         Role = "user",
@@ -203,7 +207,7 @@ namespace ChatbotAPI.Controllers
                 await foreach (var chunk in _liteLLMService.SendMessageStreamAsync(
                     request.Message,
                     history,
-                    chat?.Id,
+                    chatId,
                     request.ModelId,
                     request.SystemInstruction))
                 {
@@ -218,20 +222,28 @@ namespace ChatbotAPI.Controllers
                 }
 
                 // Save bot message for non-temporary chat
-                if (!request.Temporary && chat != null)
+                if (!request.Temporary && chatId != null)
                 {
+                    await using var saveContext = await _contextFactory.CreateDbContextAsync();
+
                     var botMessage = new Message
                     {
                         Id = Guid.NewGuid().ToString(),
                         Role = "model",
                         Content = fullText.ToString(),
-                        ChatId = chat.Id,
+                        ChatId = chatId,
                         CreatedAt = DateTime.UtcNow
                     };
 
-                    _context.Messages.Add(botMessage);
-                    chat.UpdatedAt = DateTime.UtcNow;
-                    await _context.SaveChangesAsync();
+                    saveContext.Messages.Add(botMessage);
+
+                    var chatToUpdate = await saveContext.Chats.FindAsync(chatId);
+                    if (chatToUpdate != null)
+                    {
+                        chatToUpdate.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    await saveContext.SaveChangesAsync();
                 }
             }
             catch (Exception ex)

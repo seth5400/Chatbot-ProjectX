@@ -245,21 +245,28 @@ namespace ChatbotAPI.Services
             var httpClient = _httpClientFactory.CreateClient();
             var url = $"{_baseUrl.TrimEnd('/')}/v1/chat/completions";
 
-            var prompt = $@"สรุปข้อความนี้เป็นชื่อหัวข้อสั้นๆ ไม่เกิน 30 ตัวอักษร ภาษาเดียวกับข้อความ ไม่ต้องใส่เครื่องหมายคำพูด:
-
-""{firstMessage}""
-
-ตอบแค่ชื่อหัวข้อเท่านั้น:";
+            // Truncate long messages to prevent confusion
+            var truncatedMessage = firstMessage.Length > 100
+                ? firstMessage.Substring(0, 100) + "..."
+                : firstMessage;
 
             var requestBody = new
             {
                 model = DefaultModel,
-                messages = new[]
+                messages = new object[]
                 {
-                    new { role = "user", content = prompt }
+                    new {
+                        role = "system",
+                        content = "คุณคือผู้ช่วยสร้างชื่อหัวข้อ ตอบเฉพาะชื่อหัวข้อสั้นๆ 2-5 คำ ไม่ต้องอธิบาย ไม่ต้องใส่เครื่องหมายคำพูด ห้ามพูดซ้ำคำเดิม"
+                    },
+                    new {
+                        role = "user",
+                        content = $"สร้างชื่อหัวข้อสั้นๆ สำหรับข้อความนี้: {truncatedMessage}"
+                    }
                 },
-                max_tokens = 50,
-                temperature = 0.3
+                max_tokens = 20,
+                temperature = 0.5,
+                stop = new[] { "\n", "ค่ะค่ะ", "ครับครับ", "..." }
             };
 
             var json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
@@ -285,22 +292,37 @@ namespace ChatbotAPI.Services
 
                 var title = result?.Choices?.FirstOrDefault()?.Message?.Content?.Trim();
 
-                // Clean up the title - remove quotes if present
+                // Clean up the title
                 if (!string.IsNullOrEmpty(title))
                 {
+                    // Remove quotes
                     title = title.Trim('"', '\'', '"', '"', '「', '」');
-                    if (title.Length > 50)
-                        title = title.Substring(0, 47) + "...";
-                    return title;
+
+                    // Remove repeated patterns like "ค่ะค่ะค่ะ" or "ครับครับครับ"
+                    title = System.Text.RegularExpressions.Regex.Replace(title, @"(ค่ะ){2,}", "ค่ะ");
+                    title = System.Text.RegularExpressions.Regex.Replace(title, @"(ครับ){2,}", "ครับ");
+                    title = System.Text.RegularExpressions.Regex.Replace(title, @"(\.){2,}", "");
+
+                    // Truncate if too long
+                    if (title.Length > 40)
+                        title = title.Substring(0, 37) + "...";
+
+                    // If title is valid, return it
+                    if (title.Length >= 2)
+                        return title;
                 }
 
-                // Fallback to truncated message
-                return firstMessage.Length > 50 ? firstMessage.Substring(0, 47) + "..." : firstMessage;
+                // Fallback: use first few words of the message
+                var words = firstMessage.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var fallback = string.Join(" ", words.Take(5));
+                return fallback.Length > 40 ? fallback.Substring(0, 37) + "..." : fallback;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to generate chat title, using fallback");
-                return firstMessage.Length > 50 ? firstMessage.Substring(0, 47) + "..." : firstMessage;
+                var words = firstMessage.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var fallback = string.Join(" ", words.Take(5));
+                return fallback.Length > 40 ? fallback.Substring(0, 37) + "..." : fallback;
             }
         }
 
