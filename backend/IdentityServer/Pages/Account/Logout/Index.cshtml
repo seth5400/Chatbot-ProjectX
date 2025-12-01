@@ -1,0 +1,35 @@
+@page "/Account/Logout"
+@model IdentityServer.Pages.Account.Logout.IndexModel
+@{
+    ViewData["Title"] = "Logout";
+}
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"] - Chatbot AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 min-h-screen flex items-center justify-center">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-md text-center">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">ออกจากระบบ</h1>
+            <p class="text-gray-400">คุณต้องการออกจากระบบหรือไม่?</p>
+        </div>
+
+        <form method="post" asp-route-logoutId="@Model.LogoutId">
+            <button type="submit"
+                    class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200 mb-4">
+                ยืนยันออกจากระบบ
+            </button>
+        </form>
+
+        <a href="/"
+           class="block w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200">
+            ยกเลิก
+        </a>
+    </div>
+</body>
+</html>

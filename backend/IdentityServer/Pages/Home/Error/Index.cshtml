@@ -1,0 +1,46 @@
+@page "/Home/Error"
+@model IdentityServer.Pages.Home.Error.IndexModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"] - Chatbot AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 min-h-screen flex items-center justify-center">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-md text-center">
+        <div class="mb-6">
+            <svg class="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            <h1 class="text-2xl font-bold text-white mb-2">เกิดข้อผิดพลาด</h1>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="bg-red-900/20 border border-red-500 text-red-400 p-4 rounded-lg mb-4 text-left">
+                <p class="font-semibold mb-1">@Model.ErrorMessage</p>
+                @if (!string.IsNullOrEmpty(Model.ErrorDescription))
+                {
+                    <p class="text-sm text-red-300">@Model.ErrorDescription</p>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(Model.RequestId))
+        {
+            <p class="text-gray-500 text-xs mb-4">Request ID: @Model.RequestId</p>
+        }
+
+        <a href="/"
+           class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200">
+            กลับหน้าหลัก
+        </a>
+    </div>
+</body>
+</html>

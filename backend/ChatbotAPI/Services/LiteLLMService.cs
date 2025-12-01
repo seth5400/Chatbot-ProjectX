@@ -29,7 +29,7 @@ namespace ChatbotAPI.Services
 
         // Default model - based on your LiteLLM API key access
         private const string DefaultModel = "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest";
-
+        
         public async IAsyncEnumerable<StreamChunkDto> SendMessageStreamAsync(
             string message,
             List<MessageHistoryDto>? history = null,

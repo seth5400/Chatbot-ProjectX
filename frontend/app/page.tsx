@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/lib/config";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,7 +10,8 @@ import type { Message, Chat, MessageVersion } from "@/types";
 
 // Available AI models via LiteLLM (based on your API key access)
 const AI_MODELS = [
-  { id: "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest", name: "Typhoon 2.5", description: "Thai AI Model - แนะนำ" },
+  { id: "ollama/scb10x/typhoon2.5-qwen3-30b-a3b:latest", name: "Typhoon 2.5", description: "Thai AI Model" },
+  { id: "ollama/gpt-oss:20b", name: "GPT-OSS 20B", description: "Open Source GPT Model" }
 ];
 
 // Preset Personas
@@ -58,6 +61,9 @@ const PERSONAS = [
 ];
 
 export default function Home() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +89,24 @@ export default function Home() {
   const [isCustomInstructionModalOpen, setIsCustomInstructionModalOpen] = useState(false);
   const [tempCustomInstruction, setTempCustomInstruction] = useState("");
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
+
+  // Helper to get auth headers
+  const getAuthHeaders = useCallback(() => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (session?.accessToken) {
+      headers["Authorization"] = `Bearer ${session.accessToken}`;
+    }
+    return headers;
+  }, [session?.accessToken]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
@@ -98,14 +122,16 @@ export default function Home() {
       const url = search?.trim()
         ? API_ENDPOINTS.CHAT_SEARCH(search)
         : API_ENDPOINTS.CHAT;
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
       if (!response.ok) throw new Error("Failed to load chats");
       const data = await response.json();
       setChats(data || []);
     } catch (error) {
       console.error("Failed to load chats:", error);
     }
-  }, []);
+  }, [getAuthHeaders]);
 
   useEffect(() => {
     scrollToBottom();
@@ -145,7 +171,9 @@ export default function Home() {
 
   const loadChat = async (chatId: string) => {
     try {
-      const response = await fetch(API_ENDPOINTS.CHAT_BY_ID(chatId));
+      const response = await fetch(API_ENDPOINTS.CHAT_BY_ID(chatId), {
+        headers: getAuthHeaders(),
+      });
       if (!response.ok) throw new Error("Failed to load chat");
       const data = await response.json();
       setMessages(data.messages || []);
@@ -176,6 +204,7 @@ export default function Home() {
     try {
       const response = await fetch(API_ENDPOINTS.CHAT_BY_ID(chatId), {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (!response.ok) throw new Error("Failed to delete chat");
       setChats(chats.filter((chat) => chat.id !== chatId));
@@ -192,7 +221,7 @@ export default function Home() {
     try {
       const response = await fetch(API_ENDPOINTS.CHAT_BY_ID(chatId), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ title: newTitle }),
       });
       if (!response.ok) throw new Error("Failed to rename chat");
@@ -293,7 +322,7 @@ export default function Home() {
       const systemInstruction = getCurrentSystemInstruction();
       const response = await fetch(API_ENDPOINTS.REGENERATE(currentChatId), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           userMessageId: userMessage.id,
           modelId: selectedModel,
@@ -408,7 +437,7 @@ export default function Home() {
     try {
       const response = await fetch(API_ENDPOINTS.SWITCH_VERSION(currentChatId), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           messageId: targetVersion.id,
         }),
@@ -466,7 +495,7 @@ export default function Home() {
       const systemInstruction = getCurrentSystemInstruction();
       const response = await fetch(API_ENDPOINTS.CHAT, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           message: currentInput,
           chatId: currentChatId,
@@ -575,6 +604,27 @@ export default function Home() {
       abortControllerRef.current = null;
     }
   };
+
+  // Show loading screen while checking auth
+  if (status === "loading") {
+    return (
+      <div className="flex h-screen bg-[#0f0f0f] text-white items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 mb-4 mx-auto rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center animate-pulse">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+          </div>
+          <p className="text-gray-400">กำลังโหลด...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated (will redirect)
+  if (!session) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen bg-[#0f0f0f] text-white overflow-hidden">
@@ -739,8 +789,32 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Sidebar Footer - Compact */}
+        {/* Sidebar Footer - User Info & Settings */}
         <div className="p-2 border-t border-[#222]">
+          {/* User Info */}
+          {session?.user && (
+            <div className="flex items-center gap-2 px-2 py-2 mb-1">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white text-xs font-medium">
+                {session.user.name?.charAt(0).toUpperCase() || session.user.email?.charAt(0).toUpperCase() || "U"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-white truncate">{session.user.name || session.user.email}</div>
+                {session.user.name && session.user.email && (
+                  <div className="text-[10px] text-gray-500 truncate">{session.user.email}</div>
+                )}
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="p-1.5 hover:bg-[#252525] rounded-lg transition-colors"
+                title="ออกจากระบบ"
+              >
+                <svg className="w-4 h-4 text-gray-500 hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#1e1e1e] rounded-lg text-xs transition-colors group"

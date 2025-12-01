@@ -28,7 +28,15 @@
       "Bash(dir /b \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\Services\")",
       "Bash(dir /b \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\\DTOs\")",
       "Bash(dir /b \"c:\\Users\\NBODT\\Desktop\\Chatbot\\my-gemini-chatbot\\backend\\ChatbotAPI\")",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(xargs basename:*)",
+      "Bash(dotnet new:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(dotnet run:*)"
     ],
     "deny": [],
     "ask": []
