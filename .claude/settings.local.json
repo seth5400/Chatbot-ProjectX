@@ -36,7 +36,11 @@
       "Bash(curl:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(dotnet run:*)"
+      "Bash(dotnet run:*)",
+      "Bash(if [ -d \"c:/Users/NBODT/Desktop/Chatbot/my-gemini-chatbot/test-is4\" ])",
+      "Bash(then echo \"EXISTS\")",
+      "Bash(else echo \"NOT EXISTS - Folder deleted\")",
+      "Bash(fi)"
     ],
     "deny": [],
     "ask": []

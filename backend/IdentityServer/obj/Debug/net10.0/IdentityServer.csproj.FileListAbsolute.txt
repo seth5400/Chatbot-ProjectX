@@ -64,10 +64,6 @@ C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debu
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\IdentityServer.pdb
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Azure.Core.dll
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Azure.Identity.dll
-C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Duende.IdentityModel.dll
-C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Duende.IdentityServer.dll
-C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Duende.IdentityServer.AspNetIdentity.dll
-C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Duende.IdentityServer.Storage.dll
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Humanizer.dll
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.OpenIdConnect.dll
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
@@ -218,3 +214,7 @@ C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\obj\Debu
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\obj\Debug\net10.0\IdentityServer.genruntimeconfig.cache
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\obj\Debug\net10.0\ref\IdentityServer.dll
 C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\keys\is-signing-key-9FFE1D2C42739A113EEC61E2581BC093.json
+C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\IdentityModel.dll
+C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\IdentityServer4.dll
+C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\IdentityServer4.AspNetIdentity.dll
+C:\Users\NBODT\Desktop\Chatbot\my-gemini-chatbot\backend\IdentityServer\bin\Debug\net10.0\IdentityServer4.Storage.dll

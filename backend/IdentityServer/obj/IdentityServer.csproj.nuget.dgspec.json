@@ -44,13 +44,13 @@
         "net10.0": {
           "targetAlias": "net10.0",
           "dependencies": {
-            "Duende.IdentityServer": {
+            "IdentityServer4": {
               "target": "Package",
-              "version": "[7.3.2, )"
+              "version": "[4.1.2, )"
             },
-            "Duende.IdentityServer.AspNetIdentity": {
+            "IdentityServer4.AspNetIdentity": {
               "target": "Package",
-              "version": "[7.3.2, )"
+              "version": "[4.1.2, )"
             },
             "Microsoft.AspNetCore.Identity.EntityFrameworkCore": {
               "target": "Package",

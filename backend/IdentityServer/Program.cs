@@ -27,7 +27,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// Configure IdentityServer
+// Configure IdentityServer4
 builder.Services.AddIdentityServer(options =>
 {
     options.Events.RaiseErrorEvents = true;
@@ -48,7 +48,8 @@ builder.Services.AddIdentityServer(options =>
 .AddInMemoryApiScopes(Config.ApiScopes)
 .AddInMemoryApiResources(Config.ApiResources)
 .AddInMemoryClients(Config.Clients)
-.AddAspNetIdentity<ApplicationUser>();
+.AddAspNetIdentity<ApplicationUser>()
+.AddDeveloperSigningCredential();
 
 // Configure all authentication cookies for HTTP development (MUST be after AddIdentityServer)
 builder.Services.ConfigureApplicationCookie(options =>

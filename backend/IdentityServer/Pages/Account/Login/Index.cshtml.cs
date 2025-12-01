@@ -1,7 +1,5 @@
-using Duende.IdentityServer.Events;
-using Duende.IdentityServer.Models;
-using Duende.IdentityServer.Services;
-using Duende.IdentityServer.Stores;
+using IdentityServer4.Events;
+using IdentityServer4.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -18,8 +16,6 @@ public class IndexModel : PageModel
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IIdentityServerInteractionService _interaction;
     private readonly IEventService _events;
-    private readonly IAuthenticationSchemeProvider _schemeProvider;
-    private readonly IIdentityProviderStore _identityProviderStore;
     private readonly ILogger<IndexModel> _logger;
 
     public IndexModel(
@@ -27,16 +23,12 @@ public class IndexModel : PageModel
         UserManager<ApplicationUser> userManager,
         IIdentityServerInteractionService interaction,
         IEventService events,
-        IAuthenticationSchemeProvider schemeProvider,
-        IIdentityProviderStore identityProviderStore,
         ILogger<IndexModel> logger)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _interaction = interaction;
         _events = events;
-        _schemeProvider = schemeProvider;
-        _identityProviderStore = identityProviderStore;
         _logger = logger;
     }
 
